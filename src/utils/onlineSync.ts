@@ -10,6 +10,7 @@ export interface SyncStatusInfo {
   lastSavedByEmail: string | null;
   lastSavedByName: string | null;
   revision: number;
+  activePeers?: number;
   message?: string;
 }
 
@@ -55,13 +56,14 @@ export function setLastKnownRevision(rev: number): void {
 }
 
 /**
- * Push local application data to server for online multi-account sharing
+ * Push local application data to server for online multi-account sharing.
+ * Merges automatically on server and broadcasts to all connected teachers.
  */
 export async function pushDataToOnlineServer(
   payload: SharedSyncPayload,
   userEmail: string,
   userName: string
-): Promise<{ success: boolean; revision: number; lastUpdated: string; message: string }> {
+): Promise<{ success: boolean; revision: number; lastUpdated: string; data?: any; message: string }> {
   try {
     const response = await fetch('/api/sync', {
       method: 'POST',
@@ -81,11 +83,14 @@ export async function pushDataToOnlineServer(
 
     const result = await response.json();
     if (result.success) {
-      setLastKnownRevision(result.revision);
+      if (result.revision) {
+        setLastKnownRevision(result.revision);
+      }
       return {
         success: true,
         revision: result.revision,
         lastUpdated: result.lastUpdated,
+        data: result.data,
         message: result.message || 'Đã lưu trữ trực tuyến thành công.',
       };
     } else {
@@ -146,6 +151,8 @@ export async function checkServerSyncStatus(): Promise<{
   lastUpdated: string | null;
   lastUpdatedByEmail: string;
   lastUpdatedByName: string;
+  activeAccountsCount: number;
+  activeConnectedPeers: number;
   hasData: boolean;
 }> {
   try {
@@ -155,16 +162,106 @@ export async function checkServerSyncStatus(): Promise<{
     });
     if (!response.ok) throw new Error('Status HTTP error');
     return await response.json();
-  } catch (err) {
+  } catch {
     return {
       success: false,
       revision: 0,
       lastUpdated: null,
       lastUpdatedByEmail: '',
       lastUpdatedByName: '',
+      activeAccountsCount: 0,
+      activeConnectedPeers: 0,
       hasData: false,
     };
   }
+}
+
+/**
+ * Real-time SSE Subscription:
+ * Listens to live server events. Whenever another teacher or leader saves data,
+ * callback is invoked within ~50-100ms!
+ */
+export function subscribeToOnlineUpdates(
+  onDataReceived: (data: SharedSyncPayload, revision: number, authorName: string, authorEmail: string) => void,
+  onStatusChanged: (isOnline: boolean, activePeers: number) => void,
+  userEmail: string,
+  userName: string
+): () => void {
+  if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+    return () => {};
+  }
+
+  const emailParam = encodeURIComponent(userEmail || getActiveUserEmail());
+  const nameParam = encodeURIComponent(userName || 'Giáo viên Khối 5');
+  let eventSource: EventSource | null = null;
+  let isClosed = false;
+
+  const connect = () => {
+    if (isClosed) return;
+    try {
+      eventSource = new EventSource(`/api/sync/stream?email=${emailParam}&name=${nameParam}`);
+
+      eventSource.onopen = () => {
+        onStatusChanged(true, 1);
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === 'connected') {
+            onStatusChanged(true, payload.activePeers || 1);
+            if (payload.revision) {
+              setLastKnownRevision(payload.revision);
+            }
+          } else if (payload.type === 'peers_update') {
+            onStatusChanged(true, payload.activePeers || 1);
+          } else if (payload.type === 'data_changed') {
+            if (payload.revision) {
+              setLastKnownRevision(payload.revision);
+            }
+            onStatusChanged(true, payload.activePeers || 1);
+            if (payload.data) {
+              onDataReceived(
+                payload.data, 
+                payload.revision, 
+                payload.lastUpdatedByName || 'Đồng nghiệp',
+                payload.lastUpdatedByEmail || ''
+              );
+            }
+          }
+        } catch (e) {
+          console.warn('[OnlineSync] Failed to parse SSE message:', e);
+        }
+      };
+
+      eventSource.onerror = () => {
+        onStatusChanged(false, 0);
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        // Attempt reconnect in 3s
+        if (!isClosed) {
+          setTimeout(connect, 3000);
+        }
+      };
+    } catch (err) {
+      console.warn('[OnlineSync] SSE connection init error:', err);
+      if (!isClosed) {
+        setTimeout(connect, 4000);
+      }
+    }
+  };
+
+  connect();
+
+  return () => {
+    isClosed = true;
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+  };
 }
 
 /**

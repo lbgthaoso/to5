@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   TeacherMember, 
   MonthlyReport, 
@@ -45,6 +45,7 @@ import {
   pushDataToOnlineServer,
   pullDataFromOnlineServer,
   checkServerSyncStatus,
+  subscribeToOnlineUpdates,
   sendBeaconSync,
   getLastKnownRevision
 } from './utils/onlineSync';
@@ -258,6 +259,7 @@ export default function App() {
   });
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [activePeers, setActivePeers] = useState<number>(1);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const [lastSavedBy, setLastSavedBy] = useState<string | null>(null);
 
@@ -443,6 +445,73 @@ export default function App() {
     timetables
   ]);
 
+  const isApplyingRemoteUpdateRef = useRef(false);
+  const isInitialLoadedRef = useRef(false);
+
+  // Apply server data received via real-time SSE stream or pull
+  const applyIncomingServerData = useCallback((sData: any, authorName?: string, authorEmail?: string) => {
+    if (!sData || typeof sData !== 'object') return;
+    isApplyingRemoteUpdateRef.current = true;
+
+    if (sData.settings) setSettings(sData.settings);
+    if (sData.leader_pass) setSecretPasswordLeader(sData.leader_pass);
+
+    let activeMembers = members;
+    if (sData.members && sData.members.length > 0) {
+      activeMembers = sData.members.map((m: TeacherMember) => {
+        if (m.id === 'gv-6' || m.name === 'Nguyễn Thị Bé Tý') {
+          return { ...m, isLeader: true, assignedClass: 'Tổ trưởng Chuyên môn Khối 5' };
+        }
+        if (m.id === 'gv-1' || m.name === 'Phan Thị Mỹ Linh') {
+          return { ...m, isLeader: false, assignedClass: '5A1(ĐC)' };
+        }
+        return m;
+      });
+      setMembers(activeMembers);
+    }
+
+    if (sData.reports && Array.isArray(sData.reports) && sData.reports.length > 0) {
+      setReports(sData.reports.map((r: MonthlyReport) => sanitizeMonthlyReport(r, activeMembers)));
+    }
+    if (sData.struggling && Array.isArray(sData.struggling)) {
+      setStrugglingStudents(sData.struggling);
+    }
+    if (sData.team_docs && Array.isArray(sData.team_docs)) {
+      setTeamDocuments(sData.team_docs);
+    }
+    if (sData.exams && Array.isArray(sData.exams)) {
+      setExamsAndPlans(sData.exams);
+    }
+    if (sData.lesson_studies && Array.isArray(sData.lesson_studies)) {
+      setLessonStudies(sData.lesson_studies);
+    }
+    if (sData.directives && Array.isArray(sData.directives)) {
+      setDirectives(sData.directives);
+    }
+    if (sData.meetings && Array.isArray(sData.meetings)) {
+      setMeetings(sData.meetings);
+    }
+    if (sData.emulations && Array.isArray(sData.emulations)) {
+      setEmulations(sData.emulations);
+    }
+    if (sData.emulation_docs && Array.isArray(sData.emulation_docs)) {
+      setEmulationDocuments(sData.emulation_docs);
+    }
+    if (sData.timetables && Array.isArray(sData.timetables)) {
+      setTimetables(sData.timetables);
+    }
+
+    const nowStr = new Date().toLocaleTimeString('vi-VN');
+    setLastSavedTime(nowStr);
+    if (authorName) {
+      setLastSavedBy(`${authorName}${authorEmail ? ` (${authorEmail})` : ''}`);
+    }
+
+    setTimeout(() => {
+      isApplyingRemoteUpdateRef.current = false;
+    }, 400);
+  }, [members]);
+
   // Pull latest updates from online server (shared across email accounts)
   const handlePullOnlineUpdates = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsSyncing(true);
@@ -450,49 +519,18 @@ export default function App() {
       const res = await pullDataFromOnlineServer(userEmail, currentUser.name);
       setIsOnline(true);
       if (res.data && Object.keys(res.data).length > 0) {
-        const sData = res.data;
-        if (sData.settings) setSettings(sData.settings);
-        if (sData.leader_pass) setSecretPasswordLeader(sData.leader_pass);
-        let activeMembers = members;
-        if (sData.members && sData.members.length > 0) {
-          activeMembers = sData.members.map((m: TeacherMember) => {
-            if (m.id === 'gv-6' || m.name === 'Nguyễn Thị Bé Tý') {
-              return { ...m, isLeader: true, assignedClass: 'Tổ trưởng Chuyên môn Khối 5' };
-            }
-            if (m.id === 'gv-1' || m.name === 'Phan Thị Mỹ Linh') {
-              return { ...m, isLeader: false, assignedClass: '5A1(ĐC)' };
-            }
-            return m;
-          });
-          setMembers(activeMembers);
-        }
-        if (sData.reports && sData.reports.length > 0) {
-          setReports(sData.reports.map((r: MonthlyReport) => sanitizeMonthlyReport(r, activeMembers)));
-        }
-        if (sData.struggling) setStrugglingStudents(sData.struggling);
-        if (sData.team_docs) setTeamDocuments(sData.team_docs);
-        if (sData.exams) setExamsAndPlans(sData.exams);
-        if (sData.lesson_studies) setLessonStudies(sData.lesson_studies);
-        if (sData.directives) setDirectives(sData.directives);
-        if (sData.meetings) setMeetings(sData.meetings);
-        if (sData.emulations) setEmulations(sData.emulations);
-        if (sData.emulation_docs) setEmulationDocuments(sData.emulation_docs);
-        if (sData.timetables) setTimetables(sData.timetables);
-
-        if (res.metadata?.lastUpdated) {
-          const d = new Date(res.metadata.lastUpdated);
-          setLastSavedTime(d.toLocaleTimeString('vi-VN'));
-          setLastSavedBy(
-            `${res.metadata.lastUpdatedByName || 'Giáo viên'} (${res.metadata.lastUpdatedByEmail || 'email'})`
-          );
-        }
+        applyIncomingServerData(
+          res.data,
+          res.metadata?.lastUpdatedByName,
+          res.metadata?.lastUpdatedByEmail
+        );
       }
     } catch (err) {
       console.warn('[OnlineSync] Failed to pull online updates:', err);
     } finally {
       if (!isSilent) setIsSyncing(false);
     }
-  }, [userEmail, currentUser.name, members]);
+  }, [userEmail, currentUser.name, applyIncomingServerData]);
 
   // Command: Ghi nhớ & Lưu tất cả ngay (trước khi thoát)
   const handleManualSaveAndMemorize = async () => {
@@ -564,15 +602,36 @@ export default function App() {
     };
   }, [getCurrentFullDataPayload, userEmail, currentUser.name]);
 
-  // Initial pull and periodic sync check (every 20s)
+  // Real-time instant SSE multi-device synchronization
   useEffect(() => {
+    // 1. Initial pull
     handlePullOnlineUpdates(true);
 
-    const interval = setInterval(async () => {
+    // 2. Real-time instant SSE stream: When another teacher inputs data, it arrives here in <100ms
+    const unsubscribe = subscribeToOnlineUpdates(
+      (incomingData, _rev, authorName, authorEmail) => {
+        setIsOnline(true);
+        applyIncomingServerData(incomingData, authorName, authorEmail);
+      },
+      (onlineStatus, peers) => {
+        setIsOnline(onlineStatus);
+        if (peers !== undefined && peers > 0) {
+          setActivePeers(peers);
+        }
+      },
+      userEmail,
+      currentUser.name
+    );
+
+    // 3. Fallback fast poll every 4 seconds in case SSE drops
+    const pollInterval = setInterval(async () => {
       try {
         const status = await checkServerSyncStatus();
         if (status.success) {
           setIsOnline(true);
+          if (status.activeConnectedPeers > 0) {
+            setActivePeers(status.activeConnectedPeers);
+          }
           const localRev = getLastKnownRevision();
           if (status.revision > localRev) {
             handlePullOnlineUpdates(true);
@@ -581,10 +640,59 @@ export default function App() {
       } catch {
         setIsOnline(false);
       }
-    }, 20000);
+    }, 4000);
 
-    return () => clearInterval(interval);
-  }, [handlePullOnlineUpdates]);
+    return () => {
+      unsubscribe();
+      clearInterval(pollInterval);
+    };
+  }, [userEmail, currentUser.name, handlePullOnlineUpdates, applyIncomingServerData]);
+
+  // Debounced auto-push to server whenever any data changes locally
+  useEffect(() => {
+    if (!isInitialLoadedRef.current) {
+      const t = setTimeout(() => {
+        isInitialLoadedRef.current = true;
+      }, 1500);
+      return () => clearTimeout(t);
+    }
+
+    if (isApplyingRemoteUpdateRef.current) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const payload = getCurrentFullDataPayload();
+      pushDataToOnlineServer(payload, userEmail, currentUser.name)
+        .then(() => {
+          setIsOnline(true);
+          setLastSavedTime(new Date().toLocaleTimeString('vi-VN'));
+          setLastSavedBy(`${currentUser.name} (${userEmail})`);
+        })
+        .catch((err) => {
+          console.warn('[AutoSync] Cloud push error:', err);
+        });
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [
+    getCurrentFullDataPayload,
+    userEmail,
+    currentUser.name,
+    settings,
+    secretPasswordLeader,
+    members,
+    reports,
+    strugglingStudents,
+    teamDocuments,
+    examsAndPlans,
+    lessonStudies,
+    directives,
+    meetings,
+    emulations,
+    emulationDocuments,
+    timetables
+  ]);
 
   // Handler functions for Thanh lệnh 1: Reports
   const handleSaveReport = (report: MonthlyReport) => {
@@ -835,6 +943,7 @@ export default function App() {
         members={members}
         isOnline={isOnline}
         isSyncing={isSyncing}
+        activePeers={activePeers}
         lastSavedTime={lastSavedTime}
         lastSavedBy={lastSavedBy}
         onManualSaveAndMemorize={handleManualSaveAndMemorize}

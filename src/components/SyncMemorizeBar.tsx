@@ -35,6 +35,7 @@ interface SyncMemorizeBarProps {
   onPullOnlineUpdates: () => Promise<void>;
   onExportBackup: () => void;
   totalDocumentsCount: number;
+  activePeers?: number;
   activeTab?: string;
   onGoToHome?: () => void;
 }
@@ -52,6 +53,7 @@ export const SyncMemorizeBar: React.FC<SyncMemorizeBarProps> = ({
   onPullOnlineUpdates,
   onExportBackup,
   totalDocumentsCount,
+  activePeers = 1,
   activeTab,
   onGoToHome
 }) => {
@@ -92,8 +94,13 @@ export const SyncMemorizeBar: React.FC<SyncMemorizeBarProps> = ({
                 </span>
                 <span className="font-bold text-xs tracking-wider uppercase flex items-center gap-1.5 text-emerald-100">
                   {isOnline ? <Cloud className="w-4 h-4 text-emerald-300" /> : <CloudOff className="w-4 h-4 text-rose-300" />}
-                  <span>{isOnline ? 'Chế độ Online: Đang kết nối' : 'Ngoại tuyến (Offline)'}</span>
+                  <span>{isOnline ? 'Chế độ Online: Đồng bộ tức thì' : 'Ngoại tuyến (Offline)'}</span>
                 </span>
+                {isOnline && (
+                  <span className="text-[10px] bg-emerald-700/80 text-emerald-200 px-1.5 py-0.5 rounded font-mono border border-emerald-500/50" title="Số lượng máy tính/thiết bị giáo viên đang kết nối trực tiếp">
+                    {activePeers} máy online
+                  </span>
+                )}
               </div>
 
               <div className="text-xs text-emerald-100/90 flex items-center gap-1.5 font-medium">
