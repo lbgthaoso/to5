@@ -46,7 +46,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   const tabs = [
     {
       id: 'reports' as TabType,
-      label: 'Báo cáo HS Hàng tháng',
+      label: 'Trang chính: Báo cáo HS',
       sublabel: 'Sĩ số & HS khuyết tật',
       icon: Users,
       badge: counts.reportsCount,

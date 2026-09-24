@@ -35,11 +35,24 @@ import {
 import { 
   loadPersistentData, 
   savePersistentData, 
-  clearAllPersistentData 
+  clearAllPersistentData,
+  downloadBackupFile
 } from './utils/persistentStorage';
 
+import {
+  getActiveUserEmail,
+  setActiveUserEmail,
+  pushDataToOnlineServer,
+  pullDataFromOnlineServer,
+  checkServerSyncStatus,
+  sendBeaconSync,
+  getLastKnownRevision
+} from './utils/onlineSync';
+
 import { Header } from './components/Header';
+import { SyncMemorizeBar } from './components/SyncMemorizeBar';
 import { Navigation, TabType } from './components/Navigation';
+import { Home, Sparkles } from 'lucide-react';
 import { MonthlyReportView } from './components/MonthlyReportView';
 import { StrugglingStudentsView } from './components/StrugglingStudentsView';
 import { TeamDocumentsView } from './components/TeamDocumentsView';
@@ -239,6 +252,15 @@ export default function App() {
   const [showPromptModal, setShowPromptModal] = useState<boolean>(false);
   const [showBackupModal, setShowBackupModal] = useState<boolean>(false);
 
+  // Online Sync & Multi-Account Sharing states
+  const [userEmail, setUserEmail] = useState<string>(() => {
+    return getActiveUserEmail('lbgthaoso@gmail.com');
+  });
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const [lastSavedBy, setLastSavedBy] = useState<string | null>(null);
+
   // Asynchronously hydrate from IndexedDB on startup (long-term persistent storage)
   const reloadAllDataFromStorage = useCallback(async () => {
     try {
@@ -388,9 +410,181 @@ export default function App() {
     savePersistentData('emulation_docs', emulationDocuments);
   }, [emulationDocuments]);
 
+  // Construct current full payload for saving & online sharing
+  const getCurrentFullDataPayload = useCallback(() => {
+    return {
+      settings,
+      leader_pass: secretPasswordLeader,
+      members,
+      reports,
+      struggling: strugglingStudents,
+      team_docs: teamDocuments,
+      exams: examsAndPlans,
+      lesson_studies: lessonStudies,
+      directives,
+      meetings,
+      emulations,
+      emulation_docs: emulationDocuments,
+      timetables
+    };
+  }, [
+    settings,
+    secretPasswordLeader,
+    members,
+    reports,
+    strugglingStudents,
+    teamDocuments,
+    examsAndPlans,
+    lessonStudies,
+    directives,
+    meetings,
+    emulations,
+    emulationDocuments,
+    timetables
+  ]);
+
+  // Pull latest updates from online server (shared across email accounts)
+  const handlePullOnlineUpdates = useCallback(async (isSilent = false) => {
+    if (!isSilent) setIsSyncing(true);
+    try {
+      const res = await pullDataFromOnlineServer(userEmail, currentUser.name);
+      setIsOnline(true);
+      if (res.data && Object.keys(res.data).length > 0) {
+        const sData = res.data;
+        if (sData.settings) setSettings(sData.settings);
+        if (sData.leader_pass) setSecretPasswordLeader(sData.leader_pass);
+        let activeMembers = members;
+        if (sData.members && sData.members.length > 0) {
+          activeMembers = sData.members.map((m: TeacherMember) => {
+            if (m.id === 'gv-6' || m.name === 'Nguyễn Thị Bé Tý') {
+              return { ...m, isLeader: true, assignedClass: 'Tổ trưởng Chuyên môn Khối 5' };
+            }
+            if (m.id === 'gv-1' || m.name === 'Phan Thị Mỹ Linh') {
+              return { ...m, isLeader: false, assignedClass: '5A1(ĐC)' };
+            }
+            return m;
+          });
+          setMembers(activeMembers);
+        }
+        if (sData.reports && sData.reports.length > 0) {
+          setReports(sData.reports.map((r: MonthlyReport) => sanitizeMonthlyReport(r, activeMembers)));
+        }
+        if (sData.struggling) setStrugglingStudents(sData.struggling);
+        if (sData.team_docs) setTeamDocuments(sData.team_docs);
+        if (sData.exams) setExamsAndPlans(sData.exams);
+        if (sData.lesson_studies) setLessonStudies(sData.lesson_studies);
+        if (sData.directives) setDirectives(sData.directives);
+        if (sData.meetings) setMeetings(sData.meetings);
+        if (sData.emulations) setEmulations(sData.emulations);
+        if (sData.emulation_docs) setEmulationDocuments(sData.emulation_docs);
+        if (sData.timetables) setTimetables(sData.timetables);
+
+        if (res.metadata?.lastUpdated) {
+          const d = new Date(res.metadata.lastUpdated);
+          setLastSavedTime(d.toLocaleTimeString('vi-VN'));
+          setLastSavedBy(
+            `${res.metadata.lastUpdatedByName || 'Giáo viên'} (${res.metadata.lastUpdatedByEmail || 'email'})`
+          );
+        }
+      }
+    } catch (err) {
+      console.warn('[OnlineSync] Failed to pull online updates:', err);
+    } finally {
+      if (!isSilent) setIsSyncing(false);
+    }
+  }, [userEmail, currentUser.name, members]);
+
+  // Command: Ghi nhớ & Lưu tất cả ngay (trước khi thoát)
+  const handleManualSaveAndMemorize = async () => {
+    setIsSyncing(true);
+    try {
+      const payload = getCurrentFullDataPayload();
+      // 1. Force flush to persistent local storage (IndexedDB)
+      await Promise.all([
+        savePersistentData('settings', payload.settings),
+        savePersistentData('leader_pass', payload.leader_pass),
+        savePersistentData('members', payload.members),
+        savePersistentData('reports', payload.reports),
+        savePersistentData('struggling', payload.struggling),
+        savePersistentData('team_docs', payload.team_docs),
+        savePersistentData('exams', payload.exams),
+        savePersistentData('lesson_studies', payload.lesson_studies),
+        savePersistentData('directives', payload.directives),
+        savePersistentData('meetings', payload.meetings),
+        savePersistentData('emulations', payload.emulations),
+        savePersistentData('emulation_docs', payload.emulation_docs),
+        savePersistentData('timetables', payload.timetables)
+      ]);
+
+      // 2. Push to Online Server for all shared email accounts
+      await pushDataToOnlineServer(payload, userEmail, currentUser.name);
+      setIsOnline(true);
+      const nowStr = new Date().toLocaleTimeString('vi-VN');
+      setLastSavedTime(nowStr);
+      setLastSavedBy(`${currentUser.name} (${userEmail})`);
+    } catch (err) {
+      console.warn('[OnlineSync] Push fallback to local storage:', err);
+      const nowStr = new Date().toLocaleTimeString('vi-VN');
+      setLastSavedTime(nowStr);
+      setLastSavedBy(`${currentUser.name} (Bộ nhớ máy)`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Switch active email
+  const handleUserEmailChange = (newEmail: string) => {
+    const cleaned = newEmail.trim();
+    if (cleaned) {
+      setUserEmail(cleaned);
+      setActiveUserEmail(cleaned);
+    }
+  };
+
+  // Exit protection: Auto-save before browser unload or visibility hidden
   useEffect(() => {
-    savePersistentData('timetables', timetables);
-  }, [timetables]);
+    const handleBeforeUnload = () => {
+      const payload = getCurrentFullDataPayload();
+      sendBeaconSync(payload, userEmail, currentUser.name);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        const payload = getCurrentFullDataPayload();
+        sendBeaconSync(payload, userEmail, currentUser.name);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [getCurrentFullDataPayload, userEmail, currentUser.name]);
+
+  // Initial pull and periodic sync check (every 20s)
+  useEffect(() => {
+    handlePullOnlineUpdates(true);
+
+    const interval = setInterval(async () => {
+      try {
+        const status = await checkServerSyncStatus();
+        if (status.success) {
+          setIsOnline(true);
+          const localRev = getLastKnownRevision();
+          if (status.revision > localRev) {
+            handlePullOnlineUpdates(true);
+          }
+        }
+      } catch {
+        setIsOnline(false);
+      }
+    }, 20000);
+
+    return () => clearInterval(interval);
+  }, [handlePullOnlineUpdates]);
 
   // Handler functions for Thanh lệnh 1: Reports
   const handleSaveReport = (report: MonthlyReport) => {
@@ -597,8 +791,27 @@ export default function App() {
     ];
     keys.forEach(k => localStorage.removeItem(k));
 
+    // Clear shared server storage as well
+    try {
+      await fetch('/api/sync/reset', { method: 'POST' });
+    } catch (e) {
+      console.warn('Failed to reset shared server storage', e);
+    }
+
     alert('Đã thiết lập lại trạng thái ban đầu của ứng dụng (Cô Nguyễn Thị Bé Tý - Tổ trưởng Chuyên môn Khối 5 & Cô Phan Thị Mỹ Linh - GVCN Lớp 5A1)!');
   };
+
+  const totalDocumentsCount = 
+    reports.length + 
+    strugglingStudents.length + 
+    teamDocuments.length + 
+    examsAndPlans.length + 
+    lessonStudies.length + 
+    directives.length + 
+    meetings.length + 
+    timetables.length + 
+    emulations.length + 
+    emulationDocuments.length;
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
@@ -612,6 +825,24 @@ export default function App() {
         onOpenPromptModal={() => setShowPromptModal(true)}
         onResetData={handleResetToDefault}
         onOpenBackupModal={() => setShowBackupModal(true)}
+      />
+
+      {/* Thanh Lệnh Ghi Nhớ & Đồng Bộ Trực Tuyến Trước Khi Thoát App */}
+      <SyncMemorizeBar
+        currentUser={currentUser}
+        userEmail={userEmail}
+        onChangeUserEmail={handleUserEmailChange}
+        members={members}
+        isOnline={isOnline}
+        isSyncing={isSyncing}
+        lastSavedTime={lastSavedTime}
+        lastSavedBy={lastSavedBy}
+        onManualSaveAndMemorize={handleManualSaveAndMemorize}
+        onPullOnlineUpdates={() => handlePullOnlineUpdates(false)}
+        onExportBackup={downloadBackupFile}
+        totalDocumentsCount={totalDocumentsCount}
+        activeTab={activeTab}
+        onGoToHome={() => setActiveTab('reports')}
       />
 
       {/* Navigation Command Bar */}
@@ -633,6 +864,43 @@ export default function App() {
 
       {/* Main Workspace Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+        {/* Thanh lệnh điều hướng bổ sung: Nút trở lại trang chính khi đang ở bất kỳ tab chức năng nào khác */}
+        {activeTab !== 'reports' && (
+          <div className="mb-5 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-xl p-3.5 sm:p-4 shadow-md border border-blue-400/40 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in duration-200">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-700/80 rounded-lg border border-blue-300/30 text-amber-300 shadow-inner">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-blue-200 font-bold">
+                  Thanh lệnh bổ sung đang mở
+                </div>
+                <div className="text-sm sm:text-base font-extrabold text-white">
+                  {activeTab === 'struggling' && 'Theo dõi HS Chậm tiến bộ & Kế hoạch phụ đạo'}
+                  {activeTab === 'team-plans' && 'Kế hoạch Tổ Chuyên môn & PPCT'}
+                  {activeTab === 'exams-plans' && 'Kế hoạch Dạy học & Ngân hàng Đề thi Bảo mật'}
+                  {activeTab === 'lesson-study' && 'KHBD & Sinh hoạt Chuyên môn Nghiên cứu Bài học'}
+                  {activeTab === 'directives' && 'Công văn & Văn bản Chỉ đạo Chuyên môn'}
+                  {activeTab === 'meetings' && 'Thông báo Họp & Phòng Họp trực tuyến Zoom'}
+                  {activeTab === 'timetable' && 'Thời khóa biểu các Lớp Khối 5'}
+                  {activeTab === 'emulation' && 'Hồ sơ & Đánh giá Thi đua Tổ Khối 5'}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveTab('reports')}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-500 hover:to-yellow-600 text-slate-950 text-xs sm:text-sm font-extrabold rounded-lg shadow-md hover:shadow-lg transition-all active:scale-95 border border-amber-200 ring-2 ring-amber-300/50"
+                title="Bấm vào đây để trở lại Trang chính của app (Báo cáo HS Hàng tháng)"
+              >
+                <Home className="w-4 h-4 text-slate-950 shrink-0" />
+                <span>Trở lại Trang chính của App</span>
+              </button>
+            </div>
+          </div>
+        )}
         {activeTab === 'reports' && (
           <MonthlyReportView
             reports={reports}
@@ -774,6 +1042,7 @@ export default function App() {
         isOpen={showBackupModal}
         onClose={() => setShowBackupModal(false)}
         onDataRestored={reloadAllDataFromStorage}
+        onGoToHome={() => setActiveTab('reports')}
       />
     </div>
   );

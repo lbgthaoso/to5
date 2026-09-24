@@ -139,6 +139,24 @@ export async function exportAllDataToJson(): Promise<string> {
   });
 }
 
+export async function downloadBackupFile(): Promise<void> {
+  try {
+    const jsonStr = await exportAllDataToJson();
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `SaoLuu_ToKhoi5_TanThanh_${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('Failed to export and download backup:', err);
+  }
+}
+
 export async function importDataFromJson(jsonStr: string): Promise<boolean> {
   try {
     const data = JSON.parse(jsonStr);

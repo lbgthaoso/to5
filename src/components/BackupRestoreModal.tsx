@@ -12,7 +12,8 @@ import {
   AlertTriangle, 
   HardDrive, 
   ShieldCheck, 
-  FileJson
+  FileJson,
+  Home
 } from 'lucide-react';
 import { exportAllDataToJson, importDataFromJson, clearAllPersistentData } from '../utils/persistentStorage';
 
@@ -20,12 +21,14 @@ interface BackupRestoreModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDataRestored: () => void;
+  onGoToHome?: () => void;
 }
 
 export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
   isOpen,
   onClose,
-  onDataRestored
+  onDataRestored,
+  onGoToHome
 }) => {
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [isImporting, setIsImporting] = useState<boolean>(false);
@@ -169,11 +172,24 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
             )}
           </div>
 
-          <div className="pt-2 flex justify-end">
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+            {onGoToHome && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onGoToHome();
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-bold rounded-xl text-xs shadow-xs border border-amber-300"
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span>Trở về Trang chủ</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition-colors"
+              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition-colors ml-auto"
             >
               Đóng
             </button>
