@@ -56,6 +56,25 @@ export const StrugglingStudentsView: React.FC<StrugglingStudentsViewProps> = ({
   const [editingStudent, setEditingStudent] = useState<StrugglingStudent | null>(null);
   const [deletingStudent, setDeletingStudent] = useState<StrugglingStudent | null>(null);
 
+  // List of actual homeroom teachers
+  const homeroomTeachers = members.filter(
+    m => m.assignedClass && 
+    !m.isLeader && 
+    m.name !== 'Nguyễn Thị Bé Tý' &&
+    !m.assignedClass.includes('Tổ trưởng') && 
+    !m.assignedClass.includes('Chuyên trách')
+  );
+
+  const getInitialTeacher = () => {
+    if (!currentUser.isLeader && homeroomTeachers.some(m => m.id === currentUser.id)) {
+      return currentUser;
+    }
+    const myLinh = homeroomTeachers.find(m => m.name === 'Phan Thị Mỹ Linh' || m.id === 'gv-1');
+    return myLinh || homeroomTeachers[0] || members[0];
+  };
+
+  const initialTeacher = getInitialTeacher();
+
   const [formData, setFormData] = useState<{
     name: string;
     classId: string;
@@ -69,7 +88,7 @@ export const StrugglingStudentsView: React.FC<StrugglingStudentsViewProps> = ({
     attachedFileDataUrl?: string;
   }>({
     name: '',
-    classId: currentUser.id,
+    classId: initialTeacher.id,
     subject: 'Toán',
     weaknessDetail: '',
     supportAction: '',
@@ -145,7 +164,7 @@ export const StrugglingStudentsView: React.FC<StrugglingStudentsViewProps> = ({
       });
     } else {
       setEditingStudent(null);
-      const defaultTeacher = members.find(m => m.id === currentUser.id) || members[0];
+      const defaultTeacher = getInitialTeacher();
       setFormData({
         name: '',
         classId: defaultTeacher.id,
@@ -164,7 +183,10 @@ export const StrugglingStudentsView: React.FC<StrugglingStudentsViewProps> = ({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const teacher = members.find(m => m.id === formData.classId) || currentUser;
+    let teacher = homeroomTeachers.find(m => m.id === formData.classId);
+    if (!teacher || teacher.isLeader || teacher.name === 'Nguyễn Thị Bé Tý') {
+      teacher = homeroomTeachers.find(m => m.name === 'Phan Thị Mỹ Linh' || m.id === 'gv-1') || homeroomTeachers[0] || members[0];
+    }
 
     if (editingStudent) {
       const updated: StrugglingStudent = {
@@ -554,20 +576,18 @@ export const StrugglingStudentsView: React.FC<StrugglingStudentsViewProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Lớp & Giáo viên phụ trách
+                    Lớp &amp; Giáo viên phụ trách kèm cặp
                   </label>
                   <select
                     value={formData.classId}
                     onChange={(e) => setFormData({ ...formData, classId: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg p-2 text-sm outline-none"
+                    className="w-full border border-slate-300 rounded-lg p-2.5 text-sm outline-none font-semibold text-slate-800 bg-white"
                   >
-                    {members
-                      .filter(m => m.assignedClass && !m.assignedClass.includes('Tổ trưởng'))
-                      .map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.assignedClass} - {m.name} ({m.campus})
-                        </option>
-                      ))}
+                    {homeroomTeachers.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.assignedClass} — GVCN: {m.name} ({m.campus})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

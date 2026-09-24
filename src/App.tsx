@@ -53,6 +53,82 @@ import { MemberManagementModal } from './components/MemberManagementModal';
 import { PromptModal } from './components/PromptModal';
 import { BackupRestoreModal } from './components/BackupRestoreModal';
 
+// Sanitizer to guarantee absolute separation between Tổ trưởng Nguyễn Thị Bé Tý and GVCN Phan Thị Mỹ Linh (5A1(ĐC))
+export const sanitizeMonthlyReport = (
+  r: MonthlyReport, 
+  allMembers: TeacherMember[]
+): MonthlyReport => {
+  const leader = allMembers.find(m => m.isLeader || m.name === 'Nguyễn Thị Bé Tý');
+  const leaderName = leader?.name || 'Nguyễn Thị Bé Tý';
+  const myLinh = allMembers.find(m => m.name === 'Phan Thị Mỹ Linh' || m.id === 'gv-1');
+
+  // Case 1: Any report for Class 5A1(ĐC) or with gv-1 MUST have GVCN Phan Thị Mỹ Linh
+  if (
+    r.className === '5A1(ĐC)' || 
+    r.classId === 'gv-1' || 
+    r.teacherId === 'gv-1' ||
+    (r.className && r.className.includes('5A1'))
+  ) {
+    return {
+      ...r,
+      classId: myLinh?.id || 'gv-1',
+      className: '5A1(ĐC)',
+      teacherId: myLinh?.id || 'gv-1',
+      teacherName: 'Phan Thị Mỹ Linh',
+      campus: myLinh?.campus || 'Trường chính',
+      reviewedBy: r.status === 'Đã duyệt' ? (r.reviewedBy || `Tổ trưởng ${leaderName}`) : r.reviewedBy
+    };
+  }
+
+  // Case 2: If a report was mistakenly marked with teacherName: 'Nguyễn Thị Bé Tý' or teacherId: 'gv-6' or className: 'Tổ trưởng Chuyên môn Khối 5'
+  // (Since Cô Nguyễn Thị Bé Tý is the Tổ trưởng, not a classroom teacher, any report under her name was submitted by confusion for 5A1 or another class)
+  if (
+    r.teacherName === 'Nguyễn Thị Bé Tý' || 
+    r.teacherId === 'gv-6' || 
+    (r.className && r.className.includes('Tổ trưởng'))
+  ) {
+    const matchedHomeroom = allMembers.find(
+      m => !m.isLeader && (m.id === r.classId || m.assignedClass === r.className)
+    );
+    if (matchedHomeroom) {
+      return {
+        ...r,
+        classId: matchedHomeroom.id,
+        className: matchedHomeroom.assignedClass,
+        teacherId: matchedHomeroom.id,
+        teacherName: matchedHomeroom.name,
+        campus: matchedHomeroom.campus,
+        reviewedBy: `Tổ trưởng ${leaderName}`
+      };
+    }
+
+    return {
+      ...r,
+      classId: myLinh?.id || 'gv-1',
+      className: '5A1(ĐC)',
+      teacherId: myLinh?.id || 'gv-1',
+      teacherName: 'Phan Thị Mỹ Linh',
+      campus: myLinh?.campus || 'Trường chính',
+      reviewedBy: `Tổ trưởng ${leaderName}`
+    };
+  }
+
+  // Case 3: Ensure other reports match their teacher by teacherId or className
+  const targetTeacher = allMembers.find(m => m.id === r.teacherId || m.assignedClass === r.className);
+  if (targetTeacher && !targetTeacher.isLeader) {
+    return {
+      ...r,
+      classId: targetTeacher.id,
+      className: targetTeacher.assignedClass,
+      teacherId: targetTeacher.id,
+      teacherName: targetTeacher.name,
+      campus: targetTeacher.campus
+    };
+  }
+
+  return r;
+};
+
 export default function App() {
   // App Settings
   const [settings, setSettings] = useState(() => {
@@ -97,10 +173,16 @@ export default function App() {
   // Navigation tab
   const [activeTab, setActiveTab] = useState<TabType>('reports');
 
-  // Module data states
+  // Module data states (healed with sanitizeMonthlyReport)
   const [reports, setReports] = useState<MonthlyReport[]>(() => {
     const saved = localStorage.getItem('tanthanh_k5_reports');
-    return saved ? JSON.parse(saved) : INITIAL_MONTHLY_REPORTS;
+    if (!saved) return INITIAL_MONTHLY_REPORTS;
+    try {
+      const parsed: MonthlyReport[] = JSON.parse(saved);
+      return parsed.map(r => sanitizeMonthlyReport(r, INITIAL_MEMBERS));
+    } catch {
+      return INITIAL_MONTHLY_REPORTS;
+    }
   });
 
   const [strugglingStudents, setStrugglingStudents] = useState<StrugglingStudent[]>(() => {
@@ -192,8 +274,9 @@ export default function App() {
 
       if (savedSettings) setSettings(savedSettings);
       if (savedPass) setSecretPasswordLeader(savedPass);
+      let currentMembersList = members;
       if (savedMembers && savedMembers.length > 0) {
-        const cleanedMembers = savedMembers.map(m => {
+        currentMembersList = savedMembers.map(m => {
           if (m.id === 'gv-6' || m.name === 'Nguyễn Thị Bé Tý') {
             return { ...m, isLeader: true, assignedClass: 'Tổ trưởng Chuyên môn Khối 5' };
           }
@@ -202,11 +285,15 @@ export default function App() {
           }
           return m;
         });
-        setMembers(cleanedMembers);
-        const currentFound = cleanedMembers.find(m => m.name === 'Nguyễn Thị Bé Tý' || m.isLeader) || cleanedMembers[0];
+        setMembers(currentMembersList);
+        const currentFound = currentMembersList.find(m => m.name === 'Nguyễn Thị Bé Tý' || m.isLeader) || currentMembersList[0];
         setCurrentUser(currentFound);
       }
-      if (savedReports) setReports(savedReports);
+      if (savedReports && savedReports.length > 0) {
+        setReports(savedReports.map(r => sanitizeMonthlyReport(r, currentMembersList)));
+      } else if (savedReports) {
+        setReports(savedReports);
+      }
       if (savedStruggling) setStrugglingStudents(savedStruggling);
       if (savedTeamDocs) setTeamDocuments(savedTeamDocs);
       if (savedExams) setExamsAndPlans(savedExams);
@@ -224,6 +311,31 @@ export default function App() {
   useEffect(() => {
     reloadAllDataFromStorage();
   }, [reloadAllDataFromStorage]);
+
+  // Self-healing migration for reports: ensure 5A1 is mapped to Phan Thị Mỹ Linh, not Nguyễn Thị Bé Tý
+  useEffect(() => {
+    setReports(prev => {
+      let changed = false;
+      const healed = prev.map(r => {
+        const fixed = sanitizeMonthlyReport(r, members);
+        if (
+          fixed.teacherName !== r.teacherName || 
+          fixed.className !== r.className || 
+          fixed.teacherId !== r.teacherId
+        ) {
+          changed = true;
+          return fixed;
+        }
+        return r;
+      });
+      if (changed) {
+        localStorage.setItem('tanthanh_k5_reports', JSON.stringify(healed));
+        savePersistentData('reports', healed);
+        return healed;
+      }
+      return prev;
+    });
+  }, [members]);
 
   // Sync to IndexedDB persistent storage whenever state changes
   useEffect(() => {
@@ -282,12 +394,13 @@ export default function App() {
 
   // Handler functions for Thanh lệnh 1: Reports
   const handleSaveReport = (report: MonthlyReport) => {
+    const sanitized = sanitizeMonthlyReport(report, members);
     setReports(prev => {
-      const exists = prev.some(r => r.id === report.id);
+      const exists = prev.some(r => r.id === sanitized.id);
       if (exists) {
-        return prev.map(r => r.id === report.id ? report : r);
+        return prev.map(r => r.id === sanitized.id ? sanitized : r);
       }
-      return [report, ...prev];
+      return [sanitized, ...prev];
     });
   };
 

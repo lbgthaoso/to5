@@ -44,6 +44,27 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
   const [editingReport, setEditingReport] = useState<MonthlyReport | null>(null);
   const [deletingReport, setDeletingReport] = useState<MonthlyReport | null>(null);
 
+  // List of actual homeroom teachers (excludes Cô Nguyễn Thị Bé Tý who is Tổ trưởng, and specialized teachers)
+  const homeroomTeachers = members.filter(
+    m => m.assignedClass && 
+    !m.isLeader && 
+    m.name !== 'Nguyễn Thị Bé Tý' &&
+    !m.assignedClass.includes('Tổ trưởng') && 
+    !m.assignedClass.includes('Chuyên trách')
+  );
+
+  const getInitialTeacher = () => {
+    // If currentUser is one of the homeroom teachers (e.g. Phan Thị Mỹ Linh, etc.)
+    if (!currentUser.isLeader && homeroomTeachers.some(m => m.id === currentUser.id)) {
+      return currentUser;
+    }
+    // If currentUser is Tổ trưởng Nguyễn Thị Bé Tý or special teacher: default to Cô Phan Thị Mỹ Linh (5A1(ĐC))
+    const myLinh = homeroomTeachers.find(m => m.name === 'Phan Thị Mỹ Linh' || m.id === 'gv-1');
+    return myLinh || homeroomTeachers[0] || members[0];
+  };
+
+  const initialTeacher = getInitialTeacher();
+
   // Form state
   const [formData, setFormData] = useState<{
     classId: string;
@@ -59,9 +80,9 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
     attachedFileSize: string;
     attachedFileDataUrl?: string;
   }>({
-    classId: currentUser.id,
-    totalStudents: currentUser.totalStudents || 35,
-    femaleStudents: currentUser.femaleStudents || 18,
+    classId: initialTeacher.id,
+    totalStudents: initialTeacher.totalStudents || 35,
+    femaleStudents: initialTeacher.femaleStudents || 20,
     ethnicStudents: 0,
     studentsMovedIn: 0,
     studentsMovedOut: 0,
@@ -85,8 +106,18 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
   const handleOpenAdd = (reportToEdit?: MonthlyReport) => {
     if (reportToEdit) {
       setEditingReport(reportToEdit);
+      let targetTeacherId = reportToEdit.teacherId;
+      // If report was mistakenly saved with Cô Nguyễn Thị Bé Tý for 5A1
+      if (reportToEdit.teacherName === 'Nguyễn Thị Bé Tý' || targetTeacherId === 'gv-6' || reportToEdit.className === '5A1(ĐC)') {
+        const myLinh = homeroomTeachers.find(m => m.name === 'Phan Thị Mỹ Linh' || m.id === 'gv-1');
+        targetTeacherId = myLinh?.id || 'gv-1';
+      }
+      const matchedTeacher = homeroomTeachers.find(m => m.id === targetTeacherId) 
+        || homeroomTeachers[0] 
+        || members[0];
+
       setFormData({
-        classId: reportToEdit.teacherId,
+        classId: matchedTeacher.id,
         totalStudents: reportToEdit.totalStudents,
         femaleStudents: reportToEdit.femaleStudents,
         ethnicStudents: reportToEdit.ethnicStudents || 0,
@@ -101,12 +132,11 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
       });
     } else {
       setEditingReport(null);
-      // Auto pick current user or first teacher with a class
-      const teacher = members.find(m => m.id === currentUser.id) || members[0];
+      const teacher = getInitialTeacher();
       setFormData({
         classId: teacher.id,
         totalStudents: teacher.totalStudents || 35,
-        femaleStudents: teacher.femaleStudents || 18,
+        femaleStudents: teacher.femaleStudents || 20,
         ethnicStudents: 0,
         studentsMovedIn: 0,
         studentsMovedOut: 0,
@@ -181,7 +211,15 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const selectedTeacher = members.find(m => m.id === formData.classId) || currentUser;
+    
+    // Resolve the assigned homeroom teacher
+    let selectedTeacher = homeroomTeachers.find(m => m.id === formData.classId);
+    if (!selectedTeacher || selectedTeacher.isLeader || selectedTeacher.name === 'Nguyễn Thị Bé Tý') {
+      // Must NOT be Cô Bé Tý (Tổ trưởng) - default to Cô Phan Thị Mỹ Linh (5A1)
+      selectedTeacher = homeroomTeachers.find(m => m.id === 'gv-1' || m.name === 'Phan Thị Mỹ Linh') 
+        || homeroomTeachers[0] 
+        || members[0];
+    }
 
     const report: MonthlyReport = {
       id: editingReport ? editingReport.id : 'rep-' + Date.now(),
@@ -202,7 +240,7 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
       absenteeismNotes: formData.absenteeismNotes,
       submittedAt: editingReport ? editingReport.submittedAt : new Date().toLocaleDateString('vi-VN'),
       status: currentUser.isLeader ? 'Đã duyệt' : (editingReport?.status || 'Chờ duyệt'),
-      reviewedBy: currentUser.isLeader ? `Tổ trưởng ${leaderName}` : editingReport?.reviewedBy,
+      reviewedBy: currentUser.isLeader ? `Tổ trưởng ${leaderName}` : (editingReport?.reviewedBy || `Tổ trưởng ${leaderName}`),
       reviewedAt: currentUser.isLeader ? new Date().toLocaleDateString('vi-VN') : editingReport?.reviewedAt,
       attachedFileName: formData.attachedFileName || undefined,
       attachedFileSize: formData.attachedFileSize || undefined,
@@ -275,15 +313,15 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-900 font-semibold px-2.5 py-1 rounded-lg border border-blue-200">
               <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-              Tổ trưởng Chuyên môn Khối 5: <strong className="text-blue-900">{leaderName}</strong>
+              Tổ trưởng Chuyên môn Khối 5: <strong className="text-blue-900">{leaderName}</strong> (Thẩm định &amp; Ký duyệt)
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-slate-50 text-slate-700 font-medium px-2.5 py-1 rounded-lg border border-slate-200">
-              <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-              GVCN Lớp 5A1 (Trường chính): <strong>Phan Thị Mỹ Linh</strong>
+            <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-900 font-semibold px-2.5 py-1 rounded-lg border border-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+              GVCN Lớp 5A1 (Trường chính): <strong className="text-emerald-950">Phan Thị Mỹ Linh</strong> (Nộp báo cáo)
             </span>
           </div>
-          <span className="text-[11px] text-slate-400 italic">
-            Tổng hợp dữ liệu 11 lớp học sinh khối 5 toàn trường
+          <span className="text-[11px] text-slate-500 font-medium">
+            Phân định rõ ràng: Cô Bé Tý duyệt báo cáo toàn khối • Cô Mỹ Linh báo cáo lớp 5A1
           </span>
         </div>
 
@@ -386,16 +424,28 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
                 {currentMonthReports.map((rep) => {
                   const isOwner = currentUser.id === rep.teacherId;
                   const canDelete = currentUser.isLeader || isOwner;
+                  const is5A1 = rep.className === '5A1(ĐC)' || rep.classId === 'gv-1' || rep.teacherId === 'gv-1' || (rep.className && rep.className.includes('5A1'));
+                  const displayTeacherName = is5A1 
+                    ? 'Phan Thị Mỹ Linh' 
+                    : (rep.teacherName === 'Nguyễn Thị Bé Tý' ? 'Phan Thị Mỹ Linh' : rep.teacherName);
+                  const displayClassName = is5A1 ? '5A1(ĐC)' : (rep.className?.includes('Tổ trưởng') ? '5A1(ĐC)' : rep.className);
 
                   return (
                     <tr key={rep.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-semibold text-slate-900">
-                        <div className="font-bold text-blue-700">{rep.className}</div>
-                        <span className="text-xs text-slate-500">{rep.campus}</span>
+                        <div className="font-bold text-blue-700">{displayClassName}</div>
+                        <span className="text-xs text-slate-500">{rep.campus || (is5A1 ? 'Trường chính' : '')}</span>
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="font-medium text-slate-800">{rep.teacherName}</div>
+                        <div className="font-medium text-slate-800 flex items-center gap-1.5">
+                          <span>{displayTeacherName}</span>
+                          {is5A1 && (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
+                              GVCN 5A1
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[11px] text-slate-400">Nộp ngày: {rep.submittedAt}</span>
                       </td>
 
@@ -584,12 +634,12 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Lớp & Giáo viên phụ trách
+                    Lớp &amp; Giáo viên chủ nhiệm nộp báo cáo:
                   </label>
                   <select
                     value={formData.classId}
                     onChange={(e) => {
-                      const selected = members.find(m => m.id === e.target.value);
+                      const selected = homeroomTeachers.find(m => m.id === e.target.value);
                       if (selected) {
                         setFormData({
                           ...formData,
@@ -599,16 +649,17 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
                         });
                       }
                     }}
-                    className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800 bg-white"
                   >
-                    {members
-                      .filter(m => m.assignedClass && m.assignedClass !== 'Chuyên trách' && m.assignedClass !== 'Tổ trưởng Chuyên môn Khối 5')
-                      .map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.assignedClass} - {m.name} {m.isLeader ? '⭐ (Tổ trưởng Khối 5)' : ''} ({m.campus})
-                        </option>
-                      ))}
+                    {homeroomTeachers.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.assignedClass} — GVCN: {m.name} ({m.campus})
+                      </option>
+                    ))}
                   </select>
+                  <div className="mt-1.5 p-2 bg-blue-50 rounded-lg border border-blue-200 text-[11px] text-blue-900 leading-relaxed">
+                    💡 <strong>Phân định rõ ràng:</strong> Lớp <strong>5A1(ĐC)</strong> do <strong>Cô Phan Thị Mỹ Linh</strong> làm GVCN báo cáo. <strong>Cô Nguyễn Thị Bé Tý</strong> giữ vai trò <strong>Tổ trưởng Chuyên môn</strong> thẩm định và ký duyệt báo cáo.
+                  </div>
                 </div>
 
                 <div>

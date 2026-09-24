@@ -85,7 +85,7 @@ export function exportTimetableToExcelFile(
   effectiveTerm: string,
   scheduleGrid: Record<string, string>,
   note?: string,
-  leaderName: string = 'Phan Thị Mỹ Linh'
+  leaderName: string = 'Nguyễn Thị Bé Tý'
 ) {
   import('xlsx').then(XLSX => {
     const wb = XLSX.utils.book_new();

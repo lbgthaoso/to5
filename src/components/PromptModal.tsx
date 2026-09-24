@@ -19,12 +19,12 @@ CỘNG HOÀ XÃ HỘI CHỦ NGHĨA VIỆT NAM — Độc lập - Tự do - Hạn
 
 I. QUẢN LÝ THÀNH VIÊN VÀ ĐẶC ĐIỂM TỔ CHUYÊN MÔN:
 1. Danh sách ban đầu gồm 15 thành viên (Năm học 2026-2027) căn cứ danh sách thực tế của trường:
-   - Cô Phan Thị Mỹ Linh (Tổ trưởng Chuyên môn Khối 5, Lớp 5A1 - ĐC, Sĩ số: 35/20 nữ, Trường chính, Đảng viên)
+   - Cô Nguyễn Thị Bé Tý (Tổ trưởng Chuyên môn Khối 5, Phân hiệu Kiến Bình, Năm vào ngành: 2000, Đảng viên)
+   - Cô Phan Thị Mỹ Linh (GVCN Lớp 5A1 - ĐC, Sĩ số: 35/20 nữ, Trường chính, Đảng viên)
    - Cô Nguyễn Thị Hồng Nguyệt (Lớp 5A2 - ĐC, Sĩ số: 36/13 nữ, Trường chính)
    - Cô Phạm Thị Hồng Nhiên (Lớp 5A3 - ĐC, Sĩ số: 35/16 nữ, Trường chính)
    - Cô Phạm Thị Việt Trinh (Lớp 5A4 - ĐC, Sĩ số: 36/19 nữ, Trường chính)
    - Cô Đặng Ngọc Kim Ngân (GV Chuyên trách, Trường chính)
-   - Cô Nguyễn Thị Bé Tý (Phân hiệu Kiến Bình, Năm vào ngành: 2000, Đảng viên)
    - Cô Hồ Mộng Tuyết (Lớp 5A - KB, Sĩ số: 35/19 nữ, Kiến Bình)
    - Cô Lê Thị Mai (Lớp 5B - KB, Sĩ số: 11/5 nữ, Kiến Bình)
    - Thầy Trần Công Minh (Lớp 5C - KB, Sĩ số: 31/14 nữ, Kiến Bình)
@@ -36,7 +36,7 @@ I. QUẢN LÝ THÀNH VIÊN VÀ ĐẶC ĐIỂM TỔ CHUYÊN MÔN:
    - Cô Trần Thị Phương Giang (Lớp 5 - ĐVP, Sĩ số: 32/18 nữ, Đinh Văn Phu)
    Tổng cộng: 374 học sinh / 180 nữ.
 2. Cho phép tùy biến: Dễ dàng thay đổi tên Giáo viên, điểm trường, lớp phân công và đổi tên Tổ / Tên Trường khác trong phần Cài đặt.
-3. Cho phép chuyển đổi vai trò người thao tác (Tổ trưởng Phan Thị Mỹ Linh hoặc các GV thành viên).
+3. Cho phép chuyển đổi vai trò người thao tác (Tổ trưởng Nguyễn Thị Bé Tý hoặc các GV thành viên).
 
 II. 7 THANH LỆNH CHỨC NĂNG CHÍNH:
 
