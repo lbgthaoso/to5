@@ -41,6 +41,8 @@ export interface MonthlyReport {
   absenteeismNotes: string;
   submittedAt: string;
   status: 'Đã nộp' | 'Chờ duyệt' | 'Đã duyệt';
+  reviewedBy?: string;
+  reviewedAt?: string;
   attachedFileName?: string;
   attachedFileSize?: string;
   attachedFileDataUrl?: string;
@@ -96,6 +98,7 @@ export interface ExamAndLessonPlan {
   submittedAt: string;
   status: 'Chờ duyệt' | 'Đã duyệt' | 'Yêu cầu chỉnh sửa';
   reviewNote?: string;
+  reviewedBy?: string;
   reviewedAt?: string;
   matrixIncluded: boolean; // Kèm ma trận đề
   answerKeyIncluded: boolean; // Kèm đáp án hướng dẫn chấm
@@ -143,14 +146,34 @@ export interface LessonStudyTopic {
 
 export interface SchoolDirective {
   id: string;
-  code: string; // Số hiệu CV/TB
+  code: string; // Số hiệu công văn
   title: string;
-  category: 'Công văn chỉ đạo' | 'Lịch hội họp' | 'Địa chỉ họp trực tuyến' | 'Thông báo chuyên môn';
+  issuingAuthority?: string; // Cơ quan ban hành (Phòng GD&ĐT, BGH Trường, Tổ CM...)
+  category: 'Công văn chỉ đạo' | 'Hướng dẫn chuyên môn' | 'Kế hoạch năm học' | 'Thông tư - Quyết định' | 'Khác';
   content: string;
-  meetingLink?: string; // Link Google Meet / Zoom
-  meetingTime?: string;
-  meetingPasscode?: string;
+  effectiveDate?: string;
+  signerName?: string;
   senderName: string;
+  createdAt: string;
+  isUrgent?: boolean;
+  attachedFileName?: string;
+  attachedFileSize?: string;
+  attachedFileDataUrl?: string;
+}
+
+export interface MeetingNotice {
+  id: string;
+  code: string; // Số hiệu thông báo
+  title: string;
+  meetingTime: string; // Thời gian họp (VD: 14h30 Thứ Năm, ngày 28/09/2026)
+  zoomLink: string; // Link vào trực tiếp Zoom (https://zoom.us/j/...)
+  zoomMeetingId: string; // ID phòng họp Zoom
+  zoomPasscode: string; // Mật mã phòng Zoom
+  locationType: 'Trực tuyến qua Zoom' | 'Trực tiếp tại trường' | 'Kết hợp trực tiếp & Zoom';
+  locationDetail?: string; // Địa điểm cụ thể
+  agenda: string; // Nội dung chương trình cuộc họp
+  attendees: string; // Thành phần triệu tập
+  senderName: string; // Người gửi thông báo (Tổ trưởng Nguyễn Thị Bé Tý)
   createdAt: string;
   isUrgent?: boolean;
   attachedFileName?: string;
@@ -160,6 +183,21 @@ export interface SchoolDirective {
 
 export interface EmulationPeriod {
   period: 'Học kỳ I' | 'Học kỳ II' | 'Cả năm';
+}
+
+export interface EmulationDocument {
+  id: string;
+  title: string; // Tiêu đề bảng xét thi đua / biên bản
+  period: 'Học kỳ I' | 'Học kỳ II' | 'Cả năm';
+  academicYear: string;
+  fileType: 'excel' | 'word' | 'pdf';
+  fileName: string;
+  fileSize: string;
+  fileDataUrl?: string;
+  uploadedBy: string;
+  teacherId?: string;
+  uploadedAt: string;
+  note?: string;
 }
 
 export interface EmulationRecord {

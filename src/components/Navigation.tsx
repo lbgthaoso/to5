@@ -5,7 +5,8 @@ import {
   BookOpen, 
   Lock, 
   Presentation, 
-  BellRing, 
+  FileText, 
+  Video,
   Award,
   CalendarRange
 } from 'lucide-react';
@@ -17,8 +18,9 @@ export type TabType =
   | 'exams-plans' 
   | 'lesson-study' 
   | 'directives' 
-  | 'emulation'
-  | 'timetable';
+  | 'meetings'
+  | 'timetable'
+  | 'emulation';
 
 interface NavigationProps {
   activeTab: TabType;
@@ -30,6 +32,7 @@ interface NavigationProps {
     examsCount: number;
     lessonStudiesCount: number;
     directivesCount: number;
+    meetingsCount: number;
     emulationCount: number;
     timetableCount: number;
   };
@@ -44,7 +47,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     {
       id: 'reports' as TabType,
       label: 'Báo cáo HS Hàng tháng',
-      sublabel: 'Kèm HS khuyết tật hòa nhập',
+      sublabel: 'Sĩ số & HS khuyết tật',
       icon: Users,
       badge: counts.reportsCount,
       color: 'blue'
@@ -59,7 +62,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     {
       id: 'team-plans' as TabType,
-      label: 'Kế hoạch Tổ & PP Chương trình',
+      label: 'Kế hoạch Tổ & PPCT',
       sublabel: 'Tích hợp QPAN, STEM, ĐP',
       icon: BookOpen,
       badge: counts.teamPlansCount,
@@ -68,7 +71,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     {
       id: 'exams-plans' as TabType,
       label: 'KHDH & Ngân hàng Đề thi',
-      sublabel: 'Bảo mật mật khẩu Tổ trưởng',
+      sublabel: 'Bảo mật MK Tổ trưởng',
       icon: Lock,
       badge: counts.examsCount,
       color: 'amber',
@@ -84,24 +87,32 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     {
       id: 'directives' as TabType,
-      label: 'Công văn & Thông báo họp',
-      sublabel: 'Lịch họp & Link trực tuyến',
-      icon: BellRing,
+      label: 'Công văn chỉ đạo',
+      sublabel: 'Văn bản chỉ đạo các cấp',
+      icon: FileText,
       badge: counts.directivesCount,
       color: 'indigo'
     },
     {
+      id: 'meetings' as TabType,
+      label: 'Thông báo họp (Zoom)',
+      sublabel: 'Địa chỉ phòng Zoom trực tuyến',
+      icon: Video,
+      badge: counts.meetingsCount,
+      color: 'cyan'
+    },
+    {
       id: 'timetable' as TabType,
-      label: 'Thời khóa biểu lớp dạy',
-      sublabel: 'GV gửi tệp Word TKB lớp',
+      label: 'Thời khóa biểu (TKB)',
+      sublabel: 'GV tải lên TKB của lớp',
       icon: CalendarRange,
       badge: counts.timetableCount,
       color: 'teal'
     },
     {
       id: 'emulation' as TabType,
-      label: 'Kết quả Xét thi đua',
-      sublabel: 'HKI, HKII, Cả năm',
+      label: 'Xét thi đua (Excel & Word)',
+      sublabel: 'Đính kèm kết quả thi đua',
       icon: Award,
       badge: counts.emulationCount,
       color: 'yellow'
@@ -132,20 +143,17 @@ export const Navigation: React.FC<NavigationProps> = ({
                       ? 'bg-red-600 text-white'
                       : tab.isSecret
                       ? 'bg-amber-100 text-amber-700'
+                      : tab.id === 'meetings'
+                      ? 'bg-cyan-100 text-cyan-700'
                       : 'bg-slate-100 text-slate-600'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
                 </div>
                 <div className="leading-tight">
-                  <div className="flex items-center gap-1.5 text-xs sm:text-sm">
+                  <div className="text-xs font-bold flex items-center gap-1.5">
                     <span>{tab.label}</span>
-                    {tab.isSecret && (
-                      <span className="text-[10px] bg-amber-500/20 text-amber-800 px-1 rounded font-mono font-bold">
-                        Pass
-                      </span>
-                    )}
-                    {tab.badge !== undefined && tab.badge > 0 && (
+                    {tab.badge > 0 && (
                       <span
                         className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                           isActive
@@ -157,9 +165,9 @@ export const Navigation: React.FC<NavigationProps> = ({
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-slate-600 block">
+                  <div className="text-[10px] text-slate-400 font-normal mt-0.5">
                     {tab.sublabel}
-                  </span>
+                  </div>
                 </div>
               </button>
             );

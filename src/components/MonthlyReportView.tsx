@@ -38,6 +38,7 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
   onSaveReport,
   onDeleteReport
 }) => {
+  const leaderName = members.find(m => m.isLeader)?.name || 'Nguyễn Thị Bé Tý';
   const [selectedMonth, setSelectedMonth] = useState<string>('Tháng 9');
   const [showModal, setShowModal] = useState<boolean>(false);
   const [editingReport, setEditingReport] = useState<MonthlyReport | null>(null);
@@ -123,11 +124,16 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
   const handleExportExcel = () => {
     let csv = `\uFEFFTRƯỜNG TIỂU HỌC TÂN THẠNH - TỔ CHUYÊN MÔN KHỐI 5\n`;
     csv += `BÁO CÁO THỐNG KÊ SĨ SỐ HỌC SINH - ${selectedMonth.toUpperCase()}\n`;
+    csv += `Tổ trưởng Chuyên môn Khối 5: ${leaderName}\n`;
     csv += `Ngày xuất dữ liệu: ${new Date().toLocaleDateString('vi-VN')}\n\n`;
-    csv += `STT,Lớp,Giáo viên chủ nhiệm,Điểm trường,Tổng số HS,Nữ,Dân tộc thiểu số,Khuyết tật hòa nhập,Chuyển đến,Chuyển đi,Bỏ học,Ghi chú chuyên cần,Trạng thái\n`;
+    csv += `STT,Lớp,Giáo viên chủ nhiệm,Điểm trường,Tổng số HS,Nữ,Dân tộc thiểu số,Khuyết tật hòa nhập,Chuyển đến,Chuyển đi,Bỏ học,Ghi chú chuyên cần,Người duyệt,Trạng thái\n`;
     currentMonthReports.forEach((r, idx) => {
-      csv += `${idx + 1},"${r.className}","${r.teacherName}","${r.campus}",${r.totalStudents},${r.femaleStudents},${r.ethnicStudents || 0},${r.disabledStudentsCount || 0},${r.studentsMovedIn || 0},${r.studentsMovedOut || 0},${r.dropouts || 0},"${(r.absenteeismNotes || '').replace(/"/g, '""')}","${r.status}"\n`;
+      csv += `${idx + 1},"${r.className}","${r.teacherName}","${r.campus}",${r.totalStudents},${r.femaleStudents},${r.ethnicStudents || 0},${r.disabledStudentsCount || 0},${r.studentsMovedIn || 0},${r.studentsMovedOut || 0},${r.dropouts || 0},"${(r.absenteeismNotes || '').replace(/"/g, '""')}","${r.reviewedBy || `Tổ trưởng ${leaderName}`}","${r.status}"\n`;
     });
+    csv += `\nTổng cộng:,,,"Toàn khối 5",${totalStudents},${totalFemale},${totalEthnic},${totalDisabled}\n\n`;
+    csv += `,"GIÁO VIÊN CHỦ NHIỆM",,,"TỔ TRƯỞNG CHUYÊN MÔN"\n`;
+    csv += `,"(Ký và ghi rõ họ tên)",,,"(Ký duyệt)"\n\n\n`;
+    csv += `,,,,"${leaderName}"\n`;
     downloadFile(`BaoCao_SiSo_${selectedMonth.replace(/\s+/g, '_')}_Khoi5.xlsx`, undefined, csv);
   };
 
@@ -135,6 +141,7 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
     let doc = `TRƯỜNG TIỂU HỌC TÂN THẠNH - TỔ KHỐI 5\n`;
     doc += `CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\nĐộc lập - Tự do - Hạnh phúc\n\n`;
     doc += `BÁO CÁO TỔNG HỢP SĨ SỐ VÀ TÌNH HÌNH HỌC SINH ${selectedMonth.toUpperCase()}\n`;
+    doc += `Tổ trưởng Chuyên môn Khối 5: ${leaderName}\n`;
     doc += `Thời gian báo cáo: ${new Date().toLocaleDateString('vi-VN')}\n\n`;
     doc += `1. TỔNG HỢP TOÀN KHỐI:\n`;
     doc += `- Tổng số học sinh: ${totalStudents} em\n`;
@@ -143,8 +150,11 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
     doc += `- Học sinh khuyết tật học hòa nhập: ${totalDisabled} em\n\n`;
     doc += `2. CHI TIẾT TỪNG LỚP:\n`;
     currentMonthReports.forEach(r => {
-      doc += `+ Lớp ${r.className} (${r.campus}) - GVCN: ${r.teacherName}: Tổng số ${r.totalStudents} HS (Nữ: ${r.femaleStudents}, Khuyết tật: ${r.disabledStudentsCount || 0}). Tình hình: ${r.absenteeismNotes}\n`;
+      doc += `+ Lớp ${r.className} (${r.campus}) - GVCN: ${r.teacherName}: Tổng số ${r.totalStudents} HS (Nữ: ${r.femaleStudents}, Khuyết tật: ${r.disabledStudentsCount || 0}). Tình hình: ${r.absenteeismNotes} | Phê duyệt: ${r.reviewedBy || `Tổ trưởng ${leaderName}`}\n`;
     });
+    doc += `\n\n        GIÁO VIÊN CHỦ NHIỆM                        TỔ TRƯỞNG CHUYÊN MÔN KHỐI 5\n`;
+    doc += `       (Ký, ghi rõ họ tên)                            (Ký và ghi rõ họ tên)\n\n\n\n`;
+    doc += `                                                        ${leaderName}\n`;
     downloadFile(`BaoCao_SiSo_${selectedMonth.replace(/\s+/g, '_')}_Khoi5.docx`, undefined, doc);
   };
 
@@ -190,8 +200,10 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
       studentsMovedOut: Number(formData.studentsMovedOut),
       dropouts: Number(formData.dropouts),
       absenteeismNotes: formData.absenteeismNotes,
-      submittedAt: new Date().toLocaleDateString('vi-VN'),
-      status: currentUser.isLeader ? 'Đã duyệt' : 'Chờ duyệt',
+      submittedAt: editingReport ? editingReport.submittedAt : new Date().toLocaleDateString('vi-VN'),
+      status: currentUser.isLeader ? 'Đã duyệt' : (editingReport?.status || 'Chờ duyệt'),
+      reviewedBy: currentUser.isLeader ? `Tổ trưởng ${leaderName}` : editingReport?.reviewedBy,
+      reviewedAt: currentUser.isLeader ? new Date().toLocaleDateString('vi-VN') : editingReport?.reviewedAt,
       attachedFileName: formData.attachedFileName || undefined,
       attachedFileSize: formData.attachedFileSize || undefined,
       attachedFileDataUrl: formData.attachedFileDataUrl
@@ -256,6 +268,23 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
               <span>In biểu mẫu</span>
             </button>
           </div>
+        </div>
+
+        {/* Roles information banner */}
+        <div className="mt-3.5 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-600">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-900 font-semibold px-2.5 py-1 rounded-lg border border-blue-200">
+              <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+              Tổ trưởng Chuyên môn Khối 5: <strong className="text-blue-900">{leaderName}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-slate-50 text-slate-700 font-medium px-2.5 py-1 rounded-lg border border-slate-200">
+              <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+              GVCN Lớp 5A1 (Trường chính): <strong>Phan Thị Mỹ Linh</strong>
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-400 italic">
+            Tổng hợp dữ liệu 11 lớp học sinh khối 5 toàn trường
+          </span>
         </div>
 
         {/* Month Pills */}
@@ -435,16 +464,56 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
                       </td>
 
                       <td className="py-3.5 px-3 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                            rep.status === 'Đã duyệt'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          <CheckCircle2 className="w-3 h-3" />
-                          {rep.status}
-                        </span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span
+                            className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                              rep.status === 'Đã duyệt'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            {rep.status}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+                            {rep.reviewedBy || (rep.status === 'Đã duyệt' ? `Tổ trưởng ${leaderName}` : '')}
+                          </span>
+                          {currentUser.isLeader && rep.status !== 'Đã duyệt' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onSaveReport({
+                                  ...rep,
+                                  status: 'Đã duyệt',
+                                  reviewedBy: `Tổ trưởng ${leaderName}`,
+                                  reviewedAt: new Date().toLocaleDateString('vi-VN')
+                                });
+                              }}
+                              className="text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-2 py-0.5 rounded shadow-2xs transition-colors mt-0.5 inline-flex items-center gap-1"
+                              title={`Tổ trưởng ${leaderName} phê duyệt báo cáo này`}
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Duyệt</span>
+                            </button>
+                          )}
+                          {currentUser.isLeader && rep.status === 'Đã duyệt' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onSaveReport({
+                                  ...rep,
+                                  status: 'Chờ duyệt',
+                                  reviewedBy: undefined,
+                                  reviewedAt: undefined
+                                });
+                              }}
+                              className="text-[10px] text-slate-400 hover:text-amber-700 underline mt-0.5"
+                              title="Hủy duyệt để giáo viên điều chỉnh lại"
+                            >
+                              Hủy duyệt
+                            </button>
+                          )}
+                        </div>
                       </td>
 
                       <td className="py-3.5 px-4 text-right space-x-1 whitespace-nowrap">
@@ -533,10 +602,10 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
                     className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   >
                     {members
-                      .filter(m => m.assignedClass && !m.assignedClass.includes('Tổ trưởng'))
+                      .filter(m => m.assignedClass && m.assignedClass !== 'Chuyên trách' && m.assignedClass !== 'Tổ trưởng Chuyên môn Khối 5')
                       .map(m => (
                         <option key={m.id} value={m.id}>
-                          {m.assignedClass} - {m.name} ({m.campus})
+                          {m.assignedClass} - {m.name} {m.isLeader ? '⭐ (Tổ trưởng Khối 5)' : ''} ({m.campus})
                         </option>
                       ))}
                   </select>
@@ -767,6 +836,95 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Printable Sheet View for window.print() */}
+      <div className="hidden print:block p-8 bg-white text-black space-y-6 text-sm">
+        <div className="flex justify-between items-start border-b pb-4">
+          <div className="text-center space-y-0.5">
+            <p className="text-xs uppercase font-semibold">UBND XÃ TÂN THẠNH</p>
+            <p className="font-bold text-xs uppercase">TRƯỜNG TIỂU HỌC TÂN THẠNH</p>
+            <p className="text-xs font-bold text-blue-900">TỔ CHUYÊN MÔN KHỐI 5</p>
+          </div>
+          <div className="text-center space-y-0.5">
+            <p className="font-bold text-xs uppercase">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+            <p className="text-xs italic underline">Độc lập - Tự do - Hạnh phúc</p>
+            <p className="text-[11px] italic mt-1">Tân Thạnh, ngày {new Date().getDate()} tháng {new Date().getMonth() + 1} năm {new Date().getFullYear()}</p>
+          </div>
+        </div>
+
+        <div className="text-center space-y-1">
+          <h1 className="font-black text-lg uppercase tracking-wide">
+            BÁO CÁO THỐNG KÊ SĨ SỐ HỌC SINH - {selectedMonth.toUpperCase()}
+          </h1>
+          <p className="text-xs italic">
+            (Năm học 2026 - 2027 • Quản lý chuyên môn Khối 5)
+          </p>
+        </div>
+
+        {/* Summary Table */}
+        <table className="w-full border-collapse border border-slate-800 text-xs">
+          <thead>
+            <tr className="bg-slate-100 text-slate-900 font-bold text-center">
+              <th className="border border-slate-800 p-2">STT</th>
+              <th className="border border-slate-800 p-2">Lớp</th>
+              <th className="border border-slate-800 p-2">Giáo viên chủ nhiệm</th>
+              <th className="border border-slate-800 p-2">Điểm trường</th>
+              <th className="border border-slate-800 p-2">Tổng HS</th>
+              <th className="border border-slate-800 p-2">Nữ</th>
+              <th className="border border-slate-800 p-2">Dân tộc</th>
+              <th className="border border-slate-800 p-2">Khuyết tật</th>
+              <th className="border border-slate-800 p-2">Tình hình chuyên cần</th>
+              <th className="border border-slate-800 p-2">Phê duyệt</th>
+            </tr>
+          </thead>
+          <tbody>
+            {currentMonthReports.map((r, idx) => (
+              <tr key={r.id} className="text-center">
+                <td className="border border-slate-800 p-1.5">{idx + 1}</td>
+                <td className="border border-slate-800 p-1.5 font-bold">{r.className}</td>
+                <td className="border border-slate-800 p-1.5 text-left font-semibold">{r.teacherName}</td>
+                <td className="border border-slate-800 p-1.5">{r.campus}</td>
+                <td className="border border-slate-800 p-1.5 font-bold">{r.totalStudents}</td>
+                <td className="border border-slate-800 p-1.5">{r.femaleStudents}</td>
+                <td className="border border-slate-800 p-1.5">{r.ethnicStudents || 0}</td>
+                <td className="border border-slate-800 p-1.5">{r.disabledStudentsCount || 0}</td>
+                <td className="border border-slate-800 p-1.5 text-left text-[11px]">{r.absenteeismNotes || 'Ổn định'}</td>
+                <td className="border border-slate-800 p-1.5 text-[11px]">{r.status}</td>
+              </tr>
+            ))}
+            <tr className="bg-slate-100 font-bold text-center">
+              <td colSpan={4} className="border border-slate-800 p-2 text-right uppercase">
+                TỔNG CỘNG TOÀN KHỐI 5:
+              </td>
+              <td className="border border-slate-800 p-2">{totalStudents}</td>
+              <td className="border border-slate-800 p-2">{totalFemale}</td>
+              <td className="border border-slate-800 p-2">{totalEthnic}</td>
+              <td className="border border-slate-800 p-2">{totalDisabled}</td>
+              <td colSpan={2} className="border border-slate-800 p-2 text-left text-[11px] italic">
+                {currentMonthReports.length} lớp đã nộp báo cáo
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Signatures */}
+        <div className="grid grid-cols-3 text-center pt-8 text-xs">
+          <div>
+            <p className="font-bold uppercase">NGƯỜI LẬP BIỂU</p>
+            <p className="italic text-[11px]">(Ký và ghi rõ họ tên)</p>
+          </div>
+          <div>
+            <p className="font-bold uppercase">TỔ TRƯỞNG CHUYÊN MÔN</p>
+            <p className="italic text-[11px]">(Ký và ghi rõ họ tên)</p>
+            <div className="h-14"></div>
+            <p className="font-bold text-sm">{leaderName}</p>
+          </div>
+          <div>
+            <p className="font-bold uppercase">HIỆU TRƯỞNG DUYỆT</p>
+            <p className="italic text-[11px]">(Ký và đóng dấu)</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

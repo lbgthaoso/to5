@@ -78,7 +78,7 @@ export const TeamDocumentsView: React.FC<TeamDocumentsViewProps> = ({
       `Người đăng: ${doc.uploadedBy}\n` +
       `Ngày đăng: ${doc.uploadedAt}\n\n` +
       `Mô tả nội dung:\n${doc.description}\n\n` +
-      `--- NỘI DUNG KẾ HOẠCH CHI TIẾT ĐÃ ĐƯỢC DUYỆT BỞI TỔ TRƯỞNG PHAN THỊ MỸ LINH ---\n` +
+      `--- NỘI DUNG KẾ HOẠCH CHI TIẾT ĐÃ ĐƯỢC DUYỆT BỞI TỔ TRƯỞNG NGUYỄN THỊ BÉ TÝ ---\n` +
       `${doc.fileContentText || 'Nội dung chi tiết theo khung hướng dẫn của Bộ Giáo dục & Đào tạo...'}`;
 
     downloadFile(doc.fileName || `${doc.title}.docx`, doc.fileDataUrl, fallbackText);

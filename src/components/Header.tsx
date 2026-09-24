@@ -1,6 +1,6 @@
 import React from 'react';
 import { TeacherMember } from '../types';
-import { Users, Sparkles, Settings, ShieldCheck, Download, RefreshCw } from 'lucide-react';
+import { Users, Sparkles, Settings, ShieldCheck, Download, RefreshCw, HardDrive } from 'lucide-react';
 
 interface HeaderProps {
   settings: {
@@ -16,6 +16,7 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onOpenPromptModal: () => void;
   onResetData: () => void;
+  onOpenBackupModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,7 +26,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectUser,
   onOpenSettings,
   onOpenPromptModal,
-  onResetData
+  onResetData,
+  onOpenBackupModal
 }) => {
   const totalStudents = members.reduce((sum, m) => sum + (m.totalStudents || 0), 0);
   const totalFemale = members.reduce((sum, m) => sum + (m.femaleStudents || 0), 0);
@@ -112,6 +114,18 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Action buttons */}
             <div className="flex items-center gap-1.5">
+              {onOpenBackupModal && (
+                <button
+                  type="button"
+                  onClick={onOpenBackupModal}
+                  title="Lưu trữ lâu dài & Sao lưu / Phục hồi dữ liệu"
+                  className="bg-emerald-600/90 hover:bg-emerald-600 text-white font-medium px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 border border-emerald-400/40 transition-colors shadow-2xs"
+                >
+                  <HardDrive className="w-4 h-4 text-emerald-200" />
+                  <span className="hidden md:inline">Sao Lưu Dữ Liệu</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onOpenPromptModal}

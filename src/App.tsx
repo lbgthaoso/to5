@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   TeacherMember, 
   MonthlyReport, 
@@ -13,7 +13,9 @@ import {
   LessonStudyTopic, 
   LessonStudyFeedback,
   SchoolDirective, 
+  MeetingNotice,
   EmulationRecord,
+  EmulationDocument,
   ClassTimetable
 } from './types';
 import { 
@@ -24,10 +26,17 @@ import {
   INITIAL_EXAMS_AND_PLANS, 
   INITIAL_LESSON_STUDIES, 
   INITIAL_DIRECTIVES, 
+  INITIAL_MEETINGS,
   INITIAL_EMULATIONS, 
   INITIAL_TIMETABLES,
   INITIAL_APP_SETTINGS 
 } from './data/initialData';
+
+import { 
+  loadPersistentData, 
+  savePersistentData, 
+  clearAllPersistentData 
+} from './utils/persistentStorage';
 
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
@@ -36,11 +45,13 @@ import { StrugglingStudentsView } from './components/StrugglingStudentsView';
 import { TeamDocumentsView } from './components/TeamDocumentsView';
 import { ExamAndLessonPlansView } from './components/ExamAndLessonPlansView';
 import { LessonStudyView } from './components/LessonStudyView';
-import { NoticesAndDirectivesView } from './components/NoticesAndDirectivesView';
+import { DirectivesView } from './components/DirectivesView';
+import { MeetingNoticesView } from './components/MeetingNoticesView';
 import { EmulationEvaluationView } from './components/EmulationEvaluationView';
 import { ClassTimetableView } from './components/ClassTimetableView';
 import { MemberManagementModal } from './components/MemberManagementModal';
 import { PromptModal } from './components/PromptModal';
+import { BackupRestoreModal } from './components/BackupRestoreModal';
 
 export default function App() {
   // App Settings
@@ -49,12 +60,12 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_APP_SETTINGS;
   });
 
-  // Leader Secret Password (Default: Tt112233)
+  // Leader Secret Password (Default: Tt112233 - exclusive to Cô Nguyễn Thị Bé Tý)
   const [secretPasswordLeader, setSecretPasswordLeader] = useState<string>(() => {
     return localStorage.getItem('tanthanh_k5_leader_pass') || 'Tt112233';
   });
 
-  // Members list (ensure Nguyễn Thị Bé Tý is Tổ trưởng)
+  // Members list (ensure Nguyễn Thị Bé Tý is Tổ trưởng, Phan Thị Mỹ Linh is 5A1(ĐC))
   const [members, setMembers] = useState<TeacherMember[]>(() => {
     const saved = localStorage.getItem('tanthanh_k5_members');
     if (!saved) return INITIAL_MEMBERS;
@@ -65,7 +76,11 @@ export default function App() {
           return { ...m, isLeader: true, assignedClass: 'Tổ trưởng Chuyên môn Khối 5' };
         }
         if (m.id === 'gv-1' || m.name === 'Phan Thị Mỹ Linh') {
-          return { ...m, isLeader: false, assignedClass: '5A1(ĐC)' };
+          return { 
+            ...m, 
+            isLeader: false, 
+            assignedClass: '5A1(ĐC)' 
+          };
         }
         return m;
       });
@@ -82,7 +97,7 @@ export default function App() {
   // Navigation tab
   const [activeTab, setActiveTab] = useState<TabType>('reports');
 
-  // Module data
+  // Module data states
   const [reports, setReports] = useState<MonthlyReport[]>(() => {
     const saved = localStorage.getItem('tanthanh_k5_reports');
     return saved ? JSON.parse(saved) : INITIAL_MONTHLY_REPORTS;
@@ -108,25 +123,30 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_LESSON_STUDIES;
   });
 
+  // Separated: Directives (Công văn chỉ đạo)
   const [directives, setDirectives] = useState<SchoolDirective[]>(() => {
     const saved = localStorage.getItem('tanthanh_k5_directives');
-    if (!saved) return INITIAL_DIRECTIVES;
-    try {
-      const parsed: SchoolDirective[] = JSON.parse(saved);
-      return parsed.map(d => ({
-        ...d,
-        senderName: d.senderName?.includes('Phan Thị Mỹ Linh') ? 'Tổ trưởng Nguyễn Thị Bé Tý' : (d.senderName || 'Tổ trưởng Nguyễn Thị Bé Tý')
-      }));
-    } catch {
-      return INITIAL_DIRECTIVES;
-    }
+    return saved ? JSON.parse(saved) : INITIAL_DIRECTIVES;
   });
 
+  // Separated: Meetings (Thông báo họp Zoom)
+  const [meetings, setMeetings] = useState<MeetingNotice[]>(() => {
+    const saved = localStorage.getItem('tanthanh_k5_meetings');
+    return saved ? JSON.parse(saved) : INITIAL_MEETINGS;
+  });
+
+  // Emulation records & uploaded documents
   const [emulations, setEmulations] = useState<EmulationRecord[]>(() => {
     const saved = localStorage.getItem('tanthanh_k5_emulations');
     return saved ? JSON.parse(saved) : INITIAL_EMULATIONS;
   });
 
+  const [emulationDocuments, setEmulationDocuments] = useState<EmulationDocument[]>(() => {
+    const saved = localStorage.getItem('tanthanh_k5_emulation_docs');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Timetables (Thời khóa biểu - only shows when teachers upload)
   const [timetables, setTimetables] = useState<ClassTimetable[]>(() => {
     const saved = localStorage.getItem('tanthanh_k5_timetables');
     return saved ? JSON.parse(saved) : INITIAL_TIMETABLES;
@@ -135,53 +155,129 @@ export default function App() {
   // Modals state
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showPromptModal, setShowPromptModal] = useState<boolean>(false);
+  const [showBackupModal, setShowBackupModal] = useState<boolean>(false);
 
-  // Sync to localStorage
+  // Asynchronously hydrate from IndexedDB on startup (long-term persistent storage)
+  const reloadAllDataFromStorage = useCallback(async () => {
+    try {
+      const [
+        savedSettings,
+        savedPass,
+        savedMembers,
+        savedReports,
+        savedStruggling,
+        savedTeamDocs,
+        savedExams,
+        savedLessons,
+        savedDirectives,
+        savedMeetings,
+        savedEmulations,
+        savedEmuDocs,
+        savedTimetables
+      ] = await Promise.all([
+        loadPersistentData('settings', INITIAL_APP_SETTINGS),
+        loadPersistentData('leader_pass', 'Tt112233'),
+        loadPersistentData('members', INITIAL_MEMBERS),
+        loadPersistentData('reports', INITIAL_MONTHLY_REPORTS),
+        loadPersistentData('struggling', INITIAL_STRUGGLING_STUDENTS),
+        loadPersistentData('team_docs', INITIAL_TEAM_DOCUMENTS),
+        loadPersistentData('exams', INITIAL_EXAMS_AND_PLANS),
+        loadPersistentData('lesson_studies', INITIAL_LESSON_STUDIES),
+        loadPersistentData('directives', INITIAL_DIRECTIVES),
+        loadPersistentData('meetings', INITIAL_MEETINGS),
+        loadPersistentData('emulations', INITIAL_EMULATIONS),
+        loadPersistentData('emulation_docs', [] as EmulationDocument[]),
+        loadPersistentData('timetables', INITIAL_TIMETABLES)
+      ]);
+
+      if (savedSettings) setSettings(savedSettings);
+      if (savedPass) setSecretPasswordLeader(savedPass);
+      if (savedMembers && savedMembers.length > 0) {
+        const cleanedMembers = savedMembers.map(m => {
+          if (m.id === 'gv-6' || m.name === 'Nguyễn Thị Bé Tý') {
+            return { ...m, isLeader: true, assignedClass: 'Tổ trưởng Chuyên môn Khối 5' };
+          }
+          if (m.id === 'gv-1' || m.name === 'Phan Thị Mỹ Linh') {
+            return { ...m, isLeader: false, assignedClass: '5A1(ĐC)' };
+          }
+          return m;
+        });
+        setMembers(cleanedMembers);
+        const currentFound = cleanedMembers.find(m => m.name === 'Nguyễn Thị Bé Tý' || m.isLeader) || cleanedMembers[0];
+        setCurrentUser(currentFound);
+      }
+      if (savedReports) setReports(savedReports);
+      if (savedStruggling) setStrugglingStudents(savedStruggling);
+      if (savedTeamDocs) setTeamDocuments(savedTeamDocs);
+      if (savedExams) setExamsAndPlans(savedExams);
+      if (savedLessons) setLessonStudies(savedLessons);
+      if (savedDirectives) setDirectives(savedDirectives);
+      if (savedMeetings) setMeetings(savedMeetings);
+      if (savedEmulations) setEmulations(savedEmulations);
+      if (savedEmuDocs) setEmulationDocuments(savedEmuDocs);
+      if (savedTimetables) setTimetables(savedTimetables);
+    } catch (err) {
+      console.warn('Error loading from persistent storage, using current memory state', err);
+    }
+  }, []);
+
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_settings', JSON.stringify(settings));
+    reloadAllDataFromStorage();
+  }, [reloadAllDataFromStorage]);
+
+  // Sync to IndexedDB persistent storage whenever state changes
+  useEffect(() => {
+    savePersistentData('settings', settings);
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_leader_pass', secretPasswordLeader);
+    savePersistentData('leader_pass', secretPasswordLeader);
   }, [secretPasswordLeader]);
 
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_members', JSON.stringify(members));
-    // update current user reference if updated
+    savePersistentData('members', members);
     const found = members.find(m => m.id === currentUser.id);
     if (found) setCurrentUser(found);
   }, [members]);
 
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_reports', JSON.stringify(reports));
+    savePersistentData('reports', reports);
   }, [reports]);
 
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_struggling', JSON.stringify(strugglingStudents));
+    savePersistentData('struggling', strugglingStudents);
   }, [strugglingStudents]);
 
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_team_docs', JSON.stringify(teamDocuments));
+    savePersistentData('team_docs', teamDocuments);
   }, [teamDocuments]);
 
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_exams', JSON.stringify(examsAndPlans));
+    savePersistentData('exams', examsAndPlans);
   }, [examsAndPlans]);
 
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_lesson_studies', JSON.stringify(lessonStudies));
+    savePersistentData('lesson_studies', lessonStudies);
   }, [lessonStudies]);
 
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_directives', JSON.stringify(directives));
+    savePersistentData('directives', directives);
   }, [directives]);
 
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_emulations', JSON.stringify(emulations));
+    savePersistentData('meetings', meetings);
+  }, [meetings]);
+
+  useEffect(() => {
+    savePersistentData('emulations', emulations);
   }, [emulations]);
 
   useEffect(() => {
-    localStorage.setItem('tanthanh_k5_timetables', JSON.stringify(timetables));
+    savePersistentData('emulation_docs', emulationDocuments);
+  }, [emulationDocuments]);
+
+  useEffect(() => {
+    savePersistentData('timetables', timetables);
   }, [timetables]);
 
   // Handler functions for Thanh lệnh 1: Reports
@@ -233,12 +329,14 @@ export default function App() {
   };
 
   const handleApproveExamItem = (id: string, status: 'Đã duyệt' | 'Yêu cầu chỉnh sửa', reviewNote: string) => {
+    const leaderName = members.find(m => m.isLeader)?.name || 'Nguyễn Thị Bé Tý';
     setExamsAndPlans(prev => prev.map(item => {
       if (item.id === id) {
         return {
           ...item,
           status,
           reviewNote,
+          reviewedBy: `Tổ trưởng ${leaderName}`,
           reviewedAt: new Date().toLocaleDateString('vi-VN')
         };
       }
@@ -283,7 +381,7 @@ export default function App() {
     }));
   };
 
-  // Handler functions for Thanh lệnh 6: Directives
+  // Handler functions for Thanh lệnh 6: Directives (Công văn chỉ đạo)
   const handleSaveDirective = (directive: SchoolDirective) => {
     setDirectives(prev => [directive, ...prev]);
   };
@@ -292,19 +390,13 @@ export default function App() {
     setDirectives(prev => prev.filter(d => d.id !== id));
   };
 
-  // Handler functions for Thanh lệnh 7: Emulations
-  const handleSaveEmulation = (record: EmulationRecord) => {
-    setEmulations(prev => {
-      const exists = prev.some(r => r.id === record.id);
-      if (exists) {
-        return prev.map(r => r.id === record.id ? record : r);
-      }
-      return [record, ...prev];
-    });
+  // Handler functions for Thanh lệnh 7: Meetings (Thông báo họp Zoom)
+  const handleSaveMeeting = (meeting: MeetingNotice) => {
+    setMeetings(prev => [meeting, ...prev]);
   };
 
-  const handleDeleteEmulation = (id: string) => {
-    setEmulations(prev => prev.filter(e => e.id !== id));
+  const handleDeleteMeeting = (id: string) => {
+    setMeetings(prev => prev.filter(m => m.id !== id));
   };
 
   // Handler functions for Thanh lệnh 8: Class Timetables (TKB)
@@ -323,12 +415,13 @@ export default function App() {
   };
 
   const handleApproveTimetable = (id: string, status: 'Đã duyệt' | 'Áp dụng chính thức' | 'Chờ duyệt', feedback?: string) => {
+    const leaderName = members.find(m => m.isLeader)?.name || 'Nguyễn Thị Bé Tý';
     setTimetables(prev => prev.map(t => {
       if (t.id === id) {
         return {
           ...t,
           status,
-          reviewedBy: 'Tổ trưởng Nguyễn Thị Bé Tý',
+          reviewedBy: `Tổ trưởng ${leaderName}`,
           leaderFeedback: feedback || 'Tổ trưởng đã thẩm định và phê duyệt áp dụng chính thức.',
           updatedAt: new Date().toLocaleDateString('vi-VN')
         };
@@ -337,7 +430,31 @@ export default function App() {
     }));
   };
 
-  const handleResetToDefault = () => {
+  // Handler functions for Thanh lệnh 9: Emulations (Xét thi đua)
+  const handleSaveEmulation = (record: EmulationRecord) => {
+    setEmulations(prev => {
+      const exists = prev.some(r => r.id === record.id);
+      if (exists) {
+        return prev.map(r => r.id === record.id ? record : r);
+      }
+      return [record, ...prev];
+    });
+  };
+
+  const handleDeleteEmulation = (id: string) => {
+    setEmulations(prev => prev.filter(e => e.id !== id));
+  };
+
+  const handleSaveEmulationDoc = (doc: EmulationDocument) => {
+    setEmulationDocuments(prev => [doc, ...prev]);
+  };
+
+  const handleDeleteEmulationDoc = (id: string) => {
+    setEmulationDocuments(prev => prev.filter(d => d.id !== id));
+  };
+
+  const handleResetToDefault = async () => {
+    await clearAllPersistentData();
     setMembers(INITIAL_MEMBERS);
     setCurrentUser(INITIAL_MEMBERS.find(m => m.name === 'Nguyễn Thị Bé Tý' || m.isLeader) || INITIAL_MEMBERS[0]);
     setReports(INITIAL_MONTHLY_REPORTS);
@@ -346,12 +463,28 @@ export default function App() {
     setExamsAndPlans(INITIAL_EXAMS_AND_PLANS);
     setLessonStudies(INITIAL_LESSON_STUDIES);
     setDirectives(INITIAL_DIRECTIVES);
+    setMeetings(INITIAL_MEETINGS);
     setEmulations(INITIAL_EMULATIONS);
+    setEmulationDocuments([]);
     setTimetables(INITIAL_TIMETABLES);
     setSettings(INITIAL_APP_SETTINGS);
     setSecretPasswordLeader('Tt112233');
-    localStorage.removeItem('tanthanh_k5_timetables');
-    alert('Đã khôi phục toàn bộ danh sách 15 thành viên và dữ liệu gốc ban đầu thành công!');
+
+    // clear localStorage keys
+    const keys = [
+      'tanthanh_k5_members',
+      'tanthanh_k5_reports',
+      'tanthanh_k5_timetables',
+      'tanthanh_k5_directives',
+      'tanthanh_k5_meetings',
+      'tanthanh_k5_team_docs',
+      'tanthanh_k5_exams',
+      'tanthanh_k5_emulations',
+      'tanthanh_k5_emulation_docs'
+    ];
+    keys.forEach(k => localStorage.removeItem(k));
+
+    alert('Đã thiết lập lại trạng thái ban đầu của ứng dụng (Cô Nguyễn Thị Bé Tý - Tổ trưởng Chuyên môn Khối 5 & Cô Phan Thị Mỹ Linh - GVCN Lớp 5A1)!');
   };
 
   return (
@@ -365,6 +498,7 @@ export default function App() {
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenPromptModal={() => setShowPromptModal(true)}
         onResetData={handleResetToDefault}
+        onOpenBackupModal={() => setShowBackupModal(true)}
       />
 
       {/* Navigation Command Bar */}
@@ -378,8 +512,9 @@ export default function App() {
           examsCount: examsAndPlans.filter(e => e.status === 'Chờ duyệt').length,
           lessonStudiesCount: lessonStudies.length,
           directivesCount: directives.length,
+          meetingsCount: meetings.length,
           timetableCount: timetables.length,
-          emulationCount: emulations.length
+          emulationCount: emulations.length + emulationDocuments.length
         }}
       />
 
@@ -440,15 +575,29 @@ export default function App() {
           />
         )}
 
+        {/* Separated: Công văn chỉ đạo */}
         {activeTab === 'directives' && (
-          <NoticesAndDirectivesView
+          <DirectivesView
             directives={directives}
+            members={members}
             currentUser={currentUser}
             onSaveDirective={handleSaveDirective}
             onDeleteDirective={handleDeleteDirective}
           />
         )}
 
+        {/* Separated: Thông báo họp trực tuyến Zoom */}
+        {activeTab === 'meetings' && (
+          <MeetingNoticesView
+            meetings={meetings}
+            members={members}
+            currentUser={currentUser}
+            onSaveMeeting={handleSaveMeeting}
+            onDeleteMeeting={handleDeleteMeeting}
+          />
+        )}
+
+        {/* Thời khóa biểu (TKB) - chỉ hiện khi GV tải lên */}
         {activeTab === 'timetable' && (
           <ClassTimetableView
             timetables={timetables}
@@ -460,13 +609,17 @@ export default function App() {
           />
         )}
 
+        {/* Xét thi đua - hỗ trợ Excel & Word */}
         {activeTab === 'emulation' && (
           <EmulationEvaluationView
             records={emulations}
+            emulationDocuments={emulationDocuments}
             members={members}
             currentUser={currentUser}
             onSaveRecord={handleSaveEmulation}
             onDeleteRecord={handleDeleteEmulation}
+            onSaveEmulationDoc={handleSaveEmulationDoc}
+            onDeleteEmulationDoc={handleDeleteEmulationDoc}
           />
         )}
       </main>
@@ -477,8 +630,13 @@ export default function App() {
           <div>
             <strong>{settings.schoolName}</strong> — {settings.teamName} ({settings.academicYear})
           </div>
-          <div className="text-slate-400">
-            Hệ thống quản lý chuyên môn Khối 5 • Mật khẩu duyệt đề: <span className="font-mono text-slate-600 font-bold">Tt112233</span>
+          <div className="text-slate-500">
+            Hệ thống quản lý chuyên môn Khối 5 • Thư mục KHBD &amp; Ngân hàng đề thi được bảo mật bởi <strong>Tổ trưởng Nguyễn Thị Bé Tý</strong>
+            {(currentUser.isLeader || currentUser.name.includes('Bé Tý')) && (
+              <span className="ml-2 text-amber-700 font-semibold font-mono bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                MK TT: {secretPasswordLeader}
+              </span>
+            )}
           </div>
         </div>
       </footer>
@@ -497,6 +655,12 @@ export default function App() {
       <PromptModal
         isOpen={showPromptModal}
         onClose={() => setShowPromptModal(false)}
+      />
+
+      <BackupRestoreModal
+        isOpen={showBackupModal}
+        onClose={() => setShowBackupModal(false)}
+        onDataRestored={reloadAllDataFromStorage}
       />
     </div>
   );

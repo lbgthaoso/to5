@@ -97,6 +97,7 @@ export const ClassTimetableView: React.FC<ClassTimetableViewProps> = ({
   onDeleteTimetable,
   onApproveTimetable
 }) => {
+  const leaderName = members.find(m => m.isLeader)?.name || 'Nguyễn Thị Bé Tý';
   const [viewMode, setViewMode] = useState<'grid' | 'cards'>('grid');
   const [selectedCampus, setSelectedCampus] = useState<string>('Tất cả');
   const [selectedClassId, setSelectedClassId] = useState<string>(timetables[0]?.id || '');
@@ -264,7 +265,7 @@ export const ClassTimetableView: React.FC<ClassTimetableViewProps> = ({
       attachedFileSize: formState.attachedFileSize || undefined,
       attachedFileDataUrl: formState.attachedFileDataUrl,
       status: currentUser.isLeader ? 'Áp dụng chính thức' : 'Chờ duyệt',
-      reviewedBy: currentUser.isLeader ? 'Tổ trưởng Nguyễn Thị Bé Tý' : undefined,
+      reviewedBy: currentUser.isLeader ? `Tổ trưởng ${leaderName}` : undefined,
       leaderFeedback: currentUser.isLeader ? 'Tổ trưởng đã xem và phê duyệt thời khóa biểu.' : undefined,
       submittedAt: new Date().toLocaleDateString('vi-VN'),
       updatedAt: new Date().toLocaleDateString('vi-VN')
@@ -356,7 +357,7 @@ export const ClassTimetableView: React.FC<ClassTimetableViewProps> = ({
       attachedFileSize: quickForm.fileSize,
       attachedFileDataUrl: quickForm.fileDataUrl,
       status: currentUser.isLeader ? 'Áp dụng chính thức' : 'Chờ duyệt',
-      reviewedBy: currentUser.isLeader ? 'Tổ trưởng Nguyễn Thị Bé Tý' : undefined,
+      reviewedBy: currentUser.isLeader ? `Tổ trưởng ${leaderName}` : undefined,
       leaderFeedback: currentUser.isLeader ? 'Tổ trưởng đã tiếp nhận tệp Word TKB và phê duyệt lưu hồ sơ chuyên môn.' : undefined,
       submittedAt: new Date().toLocaleDateString('vi-VN'),
       updatedAt: new Date().toLocaleDateString('vi-VN')
@@ -455,7 +456,7 @@ export const ClassTimetableView: React.FC<ClassTimetableViewProps> = ({
               <p className="font-bold uppercase">TỔ TRƯỞNG CHUYÊN MÔN</p>
               <p className="italic text-[11px]">(Ký duyệt)</p>
               <div className="h-14"></div>
-              <p className="font-bold">Nguyễn Thị Bé Tý</p>
+              <p className="font-bold">{leaderName}</p>
             </div>
           </div>
         </div>
@@ -590,16 +591,30 @@ export const ClassTimetableView: React.FC<ClassTimetableViewProps> = ({
 
       {/* Main Content Area */}
       {filteredTimetables.length === 0 ? (
-        <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-500">
-          <Calendar className="w-12 h-12 mx-auto text-slate-300 mb-2" />
-          <p className="font-semibold">Chưa có thời khóa biểu nào phù hợp với bộ lọc.</p>
-          <button
-            type="button"
-            onClick={() => handleOpenAddModal()}
-            className="mt-3 text-xs bg-teal-600 text-white font-bold px-3 py-1.5 rounded-lg shadow-xs"
-          >
-            + Gửi TKB lớp ngay
-          </button>
+        <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-slate-300 text-slate-500">
+          <Calendar className="w-16 h-16 mx-auto text-teal-400 mb-3" />
+          <h3 className="font-bold text-slate-800 text-base mb-1">Chưa Có Thời Khóa Biểu Nào Được Tải Lên</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto mb-4">
+            Hệ thống đã xoá bỏ toàn bộ TKB mẫu. Chỉ hiển thị thời khóa biểu khi giáo viên chủ nhiệm tải lên tệp của lớp mình và được lưu trữ lâu dài.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleOpenQuickUploadModal}
+              className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-colors"
+            >
+              <FileUp className="w-4 h-4" />
+              <span>Tải Lên Tệp Word TKB Lớp Mình</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenAddModal()}
+              className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-4 py-2.5 rounded-xl border border-slate-300 transition-colors"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Soạn Lưới TKB Chi Tiết</span>
+            </button>
+          </div>
         </div>
       ) : viewMode === 'grid' ? (
         /* GRID DETAIL VIEW */
@@ -732,7 +747,7 @@ export const ClassTimetableView: React.FC<ClassTimetableViewProps> = ({
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
                     <span>
-                      <strong>Ý kiến duyệt của Tổ trưởng {currentTimetable.reviewedBy || 'Nguyễn Thị Bé Tý'}:</strong> &ldquo;{currentTimetable.leaderFeedback}&rdquo;
+                      <strong>Ý kiến duyệt của {currentTimetable.reviewedBy || `Tổ trưởng ${leaderName}`}:</strong> &ldquo;{currentTimetable.leaderFeedback}&rdquo;
                     </span>
                   </div>
                   <span className="text-[11px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded shrink-0">
@@ -1013,7 +1028,7 @@ export const ClassTimetableView: React.FC<ClassTimetableViewProps> = ({
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Ý kiến đánh giá / Phê duyệt của Tổ trưởng Nguyễn Thị Bé Tý:
+                  Ý kiến đánh giá / Phê duyệt của Tổ trưởng {leaderName}:
                 </label>
                 <textarea
                   rows={3}

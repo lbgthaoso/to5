@@ -986,7 +986,7 @@ export const LessonStudyView: React.FC<LessonStudyViewProps> = ({
               <p className="font-bold uppercase">TỔ TRƯỞNG CHUYÊN MÔN</p>
               <p className="italic text-[11px]">(Ký và ghi rõ họ tên)</p>
               <div className="h-14"></div>
-              <p className="font-bold">Nguyễn Thị Bé Tý</p>
+              <p className="font-bold">{members.find(m => m.isLeader)?.name || 'Phan Thị Mỹ Linh'}</p>
             </div>
           </div>
         </div>

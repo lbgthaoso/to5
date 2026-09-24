@@ -84,7 +84,8 @@ export function exportTimetableToExcelFile(
   campus: string,
   effectiveTerm: string,
   scheduleGrid: Record<string, string>,
-  note?: string
+  note?: string,
+  leaderName: string = 'Phan Thị Mỹ Linh'
 ) {
   import('xlsx').then(XLSX => {
     const wb = XLSX.utils.book_new();
@@ -107,7 +108,7 @@ export function exportTimetableToExcelFile(
       [`Ghi chú: ${note || 'Học 2 buổi/ngày theo Chương trình GDPT 2018'}`],
       [],
       ['GIÁO VIÊN CHỦ NHIỆM', '', '', '', 'TỔ TRƯỞNG CHUYÊN MÔN'],
-      [teacherName, '', '', '', 'Nguyễn Thị Bé Tý']
+      [teacherName, '', '', '', leaderName]
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(data);
